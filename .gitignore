@@ -1,0 +1,14 @@
+# 忽略 data 文件夹及其所有内容
+data/
+
+# 忽略 Python 缓存文件夹 (截图显示为 __pycache__)
+__pycache__/
+
+# 忽略 Python 编译文件 (通常与 __pycache__ 配合使用)
+*.pyc
+
+# 忽略 environment 配置文件 (对应截图中的 environment.yml)
+environment.yml
+
+# model先不上传
+model/
