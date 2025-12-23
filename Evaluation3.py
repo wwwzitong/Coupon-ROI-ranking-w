@@ -39,24 +39,24 @@ config = {
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
 
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.1_clip=5e3_global_raw",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.3_clip=5e3_global_raw",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.5_clip=5e3_global_raw",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.0_clip=5e3_global_raw",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.5_clip=5e3_global_raw",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=2.0_clip=5e3_global_raw",
 
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.1_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.3_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.5_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.0_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.5_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=2.0_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=2.0_clip=5e3_boxcox",
+
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.1_clip=100_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.3_clip=100_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.5_clip=100_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.0_clip=100_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.5_clip=100_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=2.0_clip=100_boxcox",
 
 ]
 
 model_paths_else = [
-
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.1_clip=5e3_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.3_clip=5e3_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=0.5_clip=5e3_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.0_clip=5e3_boxcox",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr4_CD_alpha=1.5_clip=5e3_boxcox",
 ]
 
 

@@ -4,12 +4,18 @@ import tensorflow as tf
 import numpy as np
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 from data_utils import *
-# from ecom_dfcl import EcomDFCL_v3
+from ecom_dfcl_fcd import EcomDFCL_v3
 # from ecom_drm import EcomDRM19
 # from ecom_dfl import EcomDFL
 # from ecom_slearner import SLearner
-from base_NNmodel import basemodel
-from base_DFCL import base_DFCL
+# from base_NNmodel import basemodel
+# from base_DFCL import base_DFCL
+# from res_base_DFCL import res_base_DFCL
+# from DCN_base_DFCL import DCN_base_DFCL
+# from SEBlock_base_DFCL import SEBlock_base_DFCL
+# from GLU_base_DFCL import GLU_base_DFCL
+# from GLU_base_DFCL_fcd import GLU_base_DFCL
+
 # from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc
 # from dfcl_regretNet_v1_rc import EcomDFCL_regretNet_rc
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau
@@ -45,14 +51,16 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
     'model_class_name': 'base_DFCL',
-    'model_path': './model/ecom_base_DFCL_4pll_2pos_gradient',
+    'model_path': './model/base_DFCL_2pll_2pos_gradient_lr3_CD_alpha=0.5',
+    'loss_function': '2pll',  # 3erl, 
     'last_model_path': '',
     'train_data': 'data/criteo_train.csv', 
     'val_data': 'data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
-    'learning_rate': 0.001,
+    'learning_rate': 0.0001, # initial learning rate
     'summary_steps': 1000,
+    'first_decay_steps': 1000
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -61,17 +69,25 @@ parser.add_argument('--model_class_name', type=str, default=config['model_class_
                     help='The name of the model class to train.')
 parser.add_argument('--model_path', type=str, default=config['model_path'],
                     help='The path to save the model and logs.')
+parser.add_argument('--loss_function', type=str, default=config['loss_function'],
+                    help='The expression of decision loss function.')
 parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
+parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
 args = parser.parse_args()
 
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
+config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
+config['fcd_mode'] = args.fcd_mode
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
+print(f"Decision Loss Function: {config['loss_function']}")
+print(f"Alpha: {config['alpha']}")
+print(f"FCD Mode: {config['fcd_mode']}")
 print("--------------------")
 
 # In[9]:
@@ -87,11 +103,20 @@ global_batch_size = config['batch_size'] * strategy.num_replicas_in_sync
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class()
+    # model = model_class()
     # 将 alpha 传入模型构造函数
-    # model = model_class(alpha=config['alpha'])
-    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=5e3)
+    model = model_class(alpha=config['alpha'], loss_function=config['loss_function'], fcd_mode=config['fcd_mode'])
+    # optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=5e3)
     # optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
+    # 学习率调度器：带 Warmup 的余弦退火
+    lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
+        config['learning_rate'],
+        config['first_decay_steps'],
+        t_mul=2.0,
+        m_mul=0.9,
+        alpha=0.01  # 最小学习率是初始值的 1%
+    )
+    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
     model.compile(
         optimizer=optimizer,loss=None
     )

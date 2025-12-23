@@ -13,12 +13,36 @@ fixed_treatment_vec_blocks = {
     1: {'treatment': '1.0'},
 }# e.g. fixed_treatment_vec_blocks[treatment]
 
-class base_DFCL(tf.keras.Model): # std+2pos
+
+class ResidualBlock(tf.keras.layers.Layer):
+    def __init__(self, units, activation='relu', dropout=0.1, **kwargs):
+        super(ResidualBlock, self).__init__(**kwargs)
+        self.units = units
+        # 主路径
+        self.dense = tf.keras.layers.Dense(units, activation=activation, kernel_initializer='glorot_normal')
+        self.bn = tf.keras.layers.BatchNormalization() # 残差网络通常配合BN效果更好
+        if dropout > 0:
+            self.dropout = tf.keras.layers.Dropout(dropout)
+        else:
+            self.dropout = None
+
+    def call(self, inputs, training=None):
+        x = self.dense(inputs)
+        x = self.bn(x, training=training)
+        if self.dropout:
+            x = self.dropout(x, training=training)
+        # 核心：残差连接 (Element-wise Add)
+        return x + inputs
+
+
+class res_base_DFCL(tf.keras.Model): # std+2pos
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型集成了 GradNorm 和自定义决策损失。
     """
     def __init__(self, **kwargs):
+        # 如果传入了 alpha 就取出来，同时从 kwargs 里删掉它；没传就用默认值 1.0
+        self.alpha = kwargs.pop('alpha', 0.1)
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
@@ -52,15 +76,47 @@ class base_DFCL(tf.keras.Model): # std+2pos
         ], name='dense_inputs_layer')
         
         # 每个target一个独立的task tower
-        self.task_towers = {} # 2x1，为prediction loss服务
-        tower_dims = [64, 32, 1]
+        # self.task_towers = {} # 2x1，为prediction loss服务
+        # tower_dims = [64, 32, 1]
+        # for target in self.targets:
+        #     name = f"{target}_tower"
+        #     self.task_towers[name] = tf.keras.Sequential([
+        #         tf.keras.layers.Dense(dims, activation='relu', kernel_initializer='glorot_normal') for dims in tower_dims[:-1]
+        #     ] + [
+        #         tf.keras.layers.Dense(tower_dims[-1], kernel_initializer='glorot_normal')
+        #     ], name=name)
+
+        # --- 修改开始 ---
+        self.task_towers = {} 
+        
+        # 设定残差网络的超参数
+        hidden_dim = 64  # 残差通道维度（需要保持一致以便相加）
+        num_res_blocks = 2 # 堆叠多少个残差块（也就是深度）
+
         for target in self.targets:
             name = f"{target}_tower"
-            self.task_towers[name] = tf.keras.Sequential([
-                tf.keras.layers.Dense(dims, activation='relu', kernel_initializer='glorot_normal') for dims in tower_dims[:-1]
-            ] + [
-                tf.keras.layers.Dense(tower_dims[-1], kernel_initializer='glorot_normal')
-            ], name=name)
+            
+            # 构建层列表
+            layers = []
+            
+            # 1. 投影层 (Projection Layer)
+            # 作用：将输入的维度（shared_output）映射到残差网络的 hidden_dim
+            # 如果不加这一层，输入的维度可能和 hidden_dim 不一致，无法做加法
+            layers.append(tf.keras.layers.Dense(hidden_dim, activation='relu', kernel_initializer='glorot_normal'))
+            
+            # 2. 堆叠残差块
+            for _ in range(num_res_blocks):
+                layers.append(ResidualBlock(units=hidden_dim, dropout=0.1))
+                # 注意：这里不需要再显式加 relu，因为 ResidualBlock 内部已经有了
+            
+            # 3. 输出层 (Output Head)
+            # 将高维特征映射回标量预测值 (Logit)
+            layers.append(tf.keras.layers.Dense(1, kernel_initializer='glorot_normal'))
+
+            # 封装为 Sequential 模型
+            self.task_towers[name] = tf.keras.Sequential(layers, name=name)
+        # --- 修改结束 ---
+
 
         # GradNorm 的可训练损失权重
 #         self.loss_weights = tf.Variable([1.0, 1.0], trainable=True, name='grad_norm_loss_weights')
@@ -558,9 +614,11 @@ class base_DFCL(tf.keras.Model): # std+2pos
             decision_loss = tf.debugging.check_numerics(decision_loss, "NaN/Inf in decision_loss")
             
             # 2. 计算用于更新【模型参数】的损失
-            weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
+            # weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
+            weighted_task_loss = paid_loss + cost_loss
             # 对应您代码中的 total_loss
-            model_update_loss = weighted_task_loss * len(self.targets) - decision_loss
+            # model_update_loss = weighted_task_loss * len(self.targets) - decision_loss
+            model_update_loss = self.alpha * weighted_task_loss - decision_loss
         
 
         # 4. 在 tape 上下文之外，分别计算多组梯度
@@ -568,6 +626,7 @@ class base_DFCL(tf.keras.Model): # std+2pos
         model_gradients = tape.gradient(model_update_loss, model_variables)
         
         # 4.2. 单独计算 task_loss 的梯度，用于分析
+        # task_loss_gradients = tape.gradient(weighted_task_loss, model_variables)
         task_loss_gradients = tape.gradient(weighted_task_loss, model_variables)
 
         # 4.3. 单独计算 decision_loss 的梯度，用于分析
@@ -680,14 +739,16 @@ class base_DFCL(tf.keras.Model): # std+2pos
             factual_predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in validation prediction: {name}")
 
         paid_loss, cost_loss = self.compute_local_losses(factual_predictions, labels)
-        decision_loss = self.decision_improved_finite_difference_loss(all_predictions, labels)
+        decision_loss = self.decision_policy_learning_loss(all_predictions, labels)
         
         paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in val_paid_loss")
         cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in val_cost_loss")
         decision_loss = tf.debugging.check_numerics(decision_loss, "NaN/Inf in val_decision_loss")
 
-        weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
-        model_update_loss =  weighted_task_loss * len(self.targets) - decision_loss
+        # weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
+        # model_update_loss =  weighted_task_loss * len(self.targets) - decision_loss
+        weighted_task_loss = paid_loss + cost_loss
+        model_update_loss = self.alpha * weighted_task_loss - decision_loss
 
         # 移除返回字典键中的 "val_" 前缀，Keras 会自动添加
         return {
