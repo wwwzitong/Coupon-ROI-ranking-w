@@ -1,10 +1,16 @@
 from __future__ import print_function, absolute_import, division
 import os
+import sys
 import tensorflow as tf
 import numpy as np
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
 from data_utils import *
-from ecom_dfcl_fcd import EcomDFCL_v3
+from ecom_dfcl_fcd import EcomDFCL_v3, compute_global_dense_stats, DENSE_FEATURE_NAME
 # from ecom_drm import EcomDRM19
 # from ecom_dfl import EcomDFL
 # from ecom_slearner import SLearner
@@ -50,17 +56,18 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
-    'model_class_name': 'base_DFCL',
-    'model_path': './model/base_DFCL_2pll_2pos_gradient_lr3_CD_alpha=0.5',
+    'model_class_name': 'EcomDFCL_v3',
+    'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
     'loss_function': '2pll',  # 3erl, 
     'last_model_path': '',
-    'train_data': 'data/criteo_train.csv', 
-    'val_data': 'data/criteo_val.csv',
+    'train_data': '../../data/criteo_train.csv', 
+    'val_data': '../../data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
-    'learning_rate': 0.0001, # initial learning rate
+    'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
-    'first_decay_steps': 1000
+    'first_decay_steps': 1000,
+    'clipnorm': 5e3,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -73,6 +80,8 @@ parser.add_argument('--loss_function', type=str, default=config['loss_function']
                     help='The expression of decision loss function.')
 parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
+parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+
 args = parser.parse_args()
 
 # 使用命令行参数更新 config 字典
@@ -81,6 +90,8 @@ config['model_path'] = args.model_path
 config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
 config['fcd_mode'] = args.fcd_mode
+config['clipnorm'] = args.clipnorm
+
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
@@ -88,6 +99,7 @@ print(f"Model Path: {config['model_path']}")
 print(f"Decision Loss Function: {config['loss_function']}")
 print(f"Alpha: {config['alpha']}")
 print(f"FCD Mode: {config['fcd_mode']}")
+print(f"clipnorm: {config['clipnorm']}")
 print("--------------------")
 
 # In[9]:
@@ -106,17 +118,17 @@ with strategy.scope():
     # model = model_class()
     # 将 alpha 传入模型构造函数
     model = model_class(alpha=config['alpha'], loss_function=config['loss_function'], fcd_mode=config['fcd_mode'])
-    # optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=5e3)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=5e3)
     # optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
     # 学习率调度器：带 Warmup 的余弦退火
-    lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
-        config['learning_rate'],
-        config['first_decay_steps'],
-        t_mul=2.0,
-        m_mul=0.9,
-        alpha=0.01  # 最小学习率是初始值的 1%
-    )
-    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
+    # lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
+    #     config['learning_rate'],
+    #     config['first_decay_steps'],
+    #     t_mul=2.0,
+    #     m_mul=0.9,
+    #     alpha=0.01  # 最小学习率是初始值的 1%
+    # )
+    # optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
     model.compile(
         optimizer=optimizer,loss=None
     )
@@ -201,6 +213,19 @@ val_samples = val_samples.map(
 # In[ ]:
 
 # 去掉了steps_per_epoch = 300, 
+raw_mean, raw_std, log_mean, log_std = compute_global_dense_stats(train_samples, DENSE_FEATURE_NAME)
+model.set_global_fcd_stats(raw_mean, raw_std, log_mean, log_std)
+
+with open(os.path.join(config['model_path'], "global_fcd_stats.json"), "w") as f:
+    json.dump(
+        {"raw_mean": {k: float(v.numpy()) for k, v in raw_mean.items()},
+         "raw_std":  {k: float(v.numpy()) for k, v in raw_std.items()},
+         "log_mean": {k: float(v.numpy()) for k, v in log_mean.items()},
+         "log_std":  {k: float(v.numpy()) for k, v in log_std.items()}},
+        f
+    )
+print("[FCD] Computed and saved global stats.")
+
 model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型

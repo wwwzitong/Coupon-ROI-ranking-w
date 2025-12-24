@@ -1,5 +1,7 @@
 import tensorflow as tf
+import cvxpy as cp
 import numpy as np
+
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 from data_utils import *
 # 1120修改，将treatment纳入特征，形成标准的预测网络
@@ -14,18 +16,99 @@ statistical_config={
     'N0':1677550
 }
 
+
+class RobustnessSDP:
+    """使用SDP验证神经网络层的Lipschitz常数上界"""
+    
+    @staticmethod
+    def verify_layer_lipschitz(W):
+        # W: numpy array, shape [n_in, n_out] 或 [n_out, n_in] 均可
+        s = np.linalg.svd(W, compute_uv=False)
+        return float(s[0])  # 最大奇异值 = 谱范数
+
+
+    # # @staticmethod
+    # def verify_layer_lipschitz(W, activation='relu'):
+    #     """
+    #     验证单层的Lipschitz常数
+    #     W: 权重矩阵 (output_dim, input_dim)
+    #     返回:  Lipschitz常数的上界
+    #     """
+    #     n_in, n_out = W.shape[1], W.shape[0]
+        
+    #     # 创建SDP变量
+    #     P = cp.Variable((n_in, n_in), PSD=True)  # 半正定矩阵
+    #     gamma = cp.Variable(nonneg=True)  # Lipschitz常数
+        
+    #     if activation == 'relu':
+    #         # ReLU激活的Lipschitz约束
+    #         # 构造Schur complement约束
+    #         constraints = [
+    #             cp.bmat([
+    #                 [P, P @ W. T],
+    #                 [W @ P, gamma * np.eye(n_out)]
+    #             ]) >> 0,  # 半正定约束
+    #             P >> np.eye(n_in) * 1e-6  # P必须是正定的
+    #         ]
+    #     else:
+    #         # 线性层的简化约束
+    #         constraints = [W. T @ W << gamma**2 * np.eye(n_in)]
+        
+    #     # 最小化Lipschitz常数
+    #     objective = cp.Minimize(gamma)
+    #     prob = cp.Problem(objective, constraints)
+    #     prob.solve(solver=cp.SCS)
+        
+    #     if gamma.value is None:
+    #         raise RuntimeError("SDP 求解失败：gamma 未返回有效值。")
+    #     return gamma.value
+
+    @staticmethod
+    def verify_decision_robustness(model, sample_features, epsilon=0.1):
+        """
+        验证决策对输入扰动的鲁棒性
+        使用SDP检查在epsilon扰动下决策是否改变
+        """
+        # 获取原始预测
+        original_preds = model(sample_features, training=False)
+        
+        # 提取权重矩阵（假设是Dense层）
+        dense_layer = model.user_tower.layers[0]
+        W = dense_layer.kernel.numpy()
+        
+        # 计算Lipschitz常数
+        L = RobustnessSDP.verify_layer_lipschitz(W)
+        
+        # 计算决策边界的安全半径
+        # 如果 |a_i - a_j| > 2*L*epsilon, 则决策在epsilon扰动下不会改变
+        a_t1 = (original_preds['paid_treatment_1'] - 
+                original_preds['cost_treatment_1']).numpy()
+        a_t0 = (original_preds['paid_treatment_0'] - 
+                original_preds['cost_treatment_0']).numpy()
+        
+        margin = np.abs(a_t1 - a_t0)
+        safe_radius = margin / (2 * L)
+        
+        is_robust = safe_radius > epsilon
+        
+        return {
+            'lipschitz_constant': L,
+            'decision_margin': margin,
+            'safe_radius': safe_radius,
+            'is_robust': is_robust,
+            'avg_margin': np.mean(margin), # 新增
+            'min_safe_radius': np.min(safe_radius), # 新增
+            'avg_safe_radius': np.mean(safe_radius), # 新增
+            'robustness_ratio': np.mean(is_robust)
+        }
+
 class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型集成了 GradNorm 和自定义决策损失。
     """
-    def __init__(self, alpha=1.2,pred_loss_dist='bernoulli', t_df=3.0, **kwargs):
-        self.loss_function = kwargs.pop('loss_function', "2pll")
+    def __init__(self, alpha=1.2, **kwargs):
         super().__init__(**kwargs)
-        # TODO 3: 保存分布假设参数
-        self.pred_loss_dist = pred_loss_dist
-        self.t_df = float(t_df)
-
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
         self.alpha = alpha #prediction loss前面的系数
@@ -171,10 +254,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         self._last_user_tower_activations = user_tower_activations
         return predictions
     
-    def compute_local_losses(self, predictions, labels): 
-        """
-        根据 pred_loss_dist 计算 Prediction Loss
-        """
+    def compute_local_losses(self, predictions, labels): #和论文不一致啊
         paid_loss = tf.constant(0.0, dtype=tf.float32)
         cost_loss = tf.constant(0.0, dtype=tf.float32)
 
@@ -186,58 +266,31 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 pos_weight = self.paid_pos_weight
             else:
                 pos_weight = self.cost_pos_weight
-            
             local_loss = tf.constant(0.0, dtype=tf.float32)
-            
             for treatment in self.treatment_order:
                 pred_name = f"{target_name}_treatment_{treatment}"
                 logit = predictions[pred_name]
-                
-                # 统一获取预测概率（用于非Bernoulli分布）和标签
-                label = tf.cast(labels[target_name], tf.float32)
+
+                # ✅ 一次性处理：避免多次调用 tf.minimum、tf.abs 等
+                out = tf.minimum(logit, 10.0)
+                label = tf.cast(labels[target_name], tf.float32) 
+                # label = labels[target_name]
+
+                # ✅ 使用广播和向量化计算，避免循环
+                term1 = -label * out
+                term2 = (1 + label) * (tf.maximum(out, 0) + tf.math.log(1 + tf.exp(-tf.abs(out))))
+                loss_per_sample = term1 + term2
+
+                # ✅ mask 只构造一次
                 treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)
-                
-                # 计算样本权重 (处理类别不平衡)
-                # 注意：即便假设残差服从正态分布，业务上的类别不平衡依然存在，因此保留 sample_weights
+                # masked_loss = loss_per_sample * treatment_mask  # 直接乘，更高效
+                # 【核心修改】根据 pos_weight 对正样本的损失进行加权.当 label > 0 时，权重为 pos_weight，否则为 1.0
+
                 sample_weights = tf.where(label > 0, pos_weight, 1.0)
-
-                # --- TODO 3: 根据分布假设分支计算 Loss ---
-                if self.pred_loss_dist == 'bernoulli':
-                    out = tf.minimum(logit, 10.0) # 保持原有的数值稳定性处理
-                    term1 = -label * out
-                    term2 = (1 + label) * (tf.maximum(out, 0) + tf.math.log(1 + tf.exp(-tf.abs(out))))
-                    loss_per_sample = term1 + term2
-                
-                else:
-                    # 对于回归类分布，将 logits 转换为概率 [0, 1]
-                    prob = tf.sigmoid(tf.clip_by_value(logit, -10.0, 10.0))
-                    residual = label - prob # Residual = y - y_hat
-                    
-                    if self.pred_loss_dist == 'normal':
-                        # Normal (Gaussian) NLL ~ MSE
-                        # Loss ~ (y - p)^2
-                        loss_per_sample = 0.5 * tf.square(residual)
-                    
-                    elif self.pred_loss_dist == 'laplace':
-                        # Laplace NLL ~ MAE
-                        # Loss ~ |y - p|
-                        loss_per_sample = tf.abs(residual)
-                    
-                    elif self.pred_loss_dist == 't':
-                        # Student-t NLL (假设 loc=0, scale=1, 仅优化 df 带来的重尾特性)
-                        # Loss ~ log(df + residual^2)
-                        loss_per_sample = 0.5 * (self.t_df + 1) * tf.math.log(1 + tf.square(residual) / self.t_df)
-                    
-                    else:
-                        # 默认回退到 MSE
-                        loss_per_sample = tf.square(residual)
-
-                # --- 结束分支 ---
-
-                # 应用样本权重和 Treatment Mask
                 weighted_loss_per_sample = loss_per_sample * sample_weights
-                masked_loss = weighted_loss_per_sample * treatment_mask 
+                masked_loss = weighted_loss_per_sample * treatment_mask  # 使用加权后的损失
                 
+                # ✅ 累加 sum
                 local_loss += tf.reduce_sum(masked_loss)
 
             if target_name == 'paid':
@@ -247,7 +300,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
 
         return paid_loss, cost_loss
 
-    def decision_policy_learning_loss(self, predictions, labels): #decision loss也和论S文有出入
+    def decision_policy_learning_loss(self, predictions, labels): #decision loss也和论文有出入
         '''
         预测层只有prediction loss相关的，没有和决策直接相关的.
         很奇怪。这里相当于将prediction loss相关变量组合为决策预测层

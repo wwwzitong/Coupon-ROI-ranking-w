@@ -4,16 +4,14 @@ import os
 import argparse
 import numpy as np
 import tensorflow as tf
+from datetime import datetime
 
 from data_utils import *
 
-from ecom_dfcl_pred import EcomDFCL_v3
+from ecom_dfcl_SDP import EcomDFCL_v3, RobustnessSDP
 
 # from base_NNmodel import basemodel
 # from base_DFCL import base_DFCL
-
-# TODO 3: 引入 test.py 中的残差分析工具
-from test import analyze_residual_distribution
 
 # -------------------- 环境设置 --------------------
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -36,30 +34,97 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
                 tf.summary.scalar(f"epoch_{metric}", value, step=epoch)
         print(f"\nEpoch {epoch + 1} metrics: {logs}")
 
+
+class SDPVerificationCallback(tf.keras.callbacks.Callback):
+    def __init__(self, val_dataset, log_dir, check_freq=1, epsilon=0.1, output_file=None):
+        """
+        Args:
+            val_dataset: 用于验证的数据集 (tf.data.Dataset)
+            log_dir: TensorBoard 日志目录
+            check_freq: 每多少个 epoch 检查一次
+            epsilon: 鲁棒性校验的扰动半径阈值
+        """
+        super(SDPVerificationCallback, self).__init__()
+        # 从 dataset 中预取一个 batch 用于固定验证
+        # 注意：这里假设 val_dataset 已经经过 batch 处理
+        try:
+            iterator = iter(val_dataset)
+            self.sample_batch = next(iterator)
+            self.features, _ = self.sample_batch # 解包 (features, labels)
+            print("SDP Callback: 成功提取验证样本 batch。")
+        except Exception as e:
+            print(f"SDP Callback Warning: 无法从验证集提取样本，SDP 验证将被跳过。错误: {e}")
+            self.features = None
+
+        # 创建独立的 writer 以免混淆
+        self.file_writer = tf.summary.create_file_writer(os.path.join(log_dir, "sdp_robustness"))
+        self.check_freq = check_freq
+        self.epsilon = epsilon
+        self.output_file = output_file or os.path.join(log_dir, "sdp_metrics.txt")
+
+    def on_epoch_end(self, epoch, logs=None):
+        if self.features is None or (epoch + 1) % self.check_freq != 0:
+            return
+            
+        print(f"\n[SDP Callback] 正在进行第 {epoch+1} 轮的鲁棒性验证 (Epsilon={self.epsilon})...")
+        
+        # 调用 RobustnessSDP 静态方法进行验证
+        # 注意：RobustnessSDP 必须在 ecom_dfcl_SDP.py 中定义
+        try:
+            metrics = RobustnessSDP.verify_decision_robustness(
+                self.model, 
+                self.features, 
+                epsilon=self.epsilon
+            )
+            
+            # 打印简报
+            print(f"  > Lipschitz Constant (L): {metrics['lipschitz_constant']:.4f}")
+            print(f"  > Avg_Decision_Margin: {metrics['avg_margin']:.4f}")
+            print(f"  > Avg Safe Radius: {metrics['avg_safe_radius']:.4f}")
+            print(f"  > Robust Samples Ratio: {metrics['robustness_ratio']:.2%}")
+            
+            # 追加写入文件
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_text = (
+                f"[{ts}] epoch={epoch+1} epsilon={self.epsilon}\n"
+                f"  > Lipschitz Constant (L): {metrics['lipschitz_constant']:.4f}\n"
+                f"  > Avg_Decision_Margin: {metrics['avg_margin']:.4f}\n"
+                f"  > Avg Safe Radius: {metrics['avg_safe_radius']:.4f}\n"
+                f"  > Robust Samples Ratio: {metrics['robustness_ratio']:.2%}\n\n"
+            )
+            with open(self.output_file, "a", encoding="utf-8") as f:
+                f.write(log_text)
+
+            # 记录到 TensorBoard
+            with self.file_writer.as_default():
+                tf.summary.scalar("SDP/Lipschitz_Constant_L", metrics['lipschitz_constant'], step=epoch)
+                tf.summary.scalar("SDP/Avg_Decision_Margin", metrics['avg_margin'], step=epoch) # 注意键名匹配
+                tf.summary.scalar("SDP/Avg_Safe_Radius", metrics['avg_safe_radius'], step=epoch)
+                tf.summary.scalar("SDP/Robustness_Ratio", metrics['robustness_ratio'], step=epoch)
+                
+        except Exception as e:
+            print(f"\n[SDP Callback Error] 验证失败: {e}")
+
 # ==================== 主函数 ====================
 def main():
     # --- 1. 配置字典 (默认值) ---
     config = {
-        "model_class_name": "EcomDFCL_v3", # 默认为支持 TODO 3 的模型
+        "model_class_name": "EcomDFCL_v3", 
         "model_path": "./model/exp_todo3_default",
         "last_model_path": "",
         "train_data": "data/criteo_train.csv",
         "val_data": "data/criteo_val.csv",
         "batch_size": 256,
         "num_epochs": 50,
-        "learning_rate": 1e-4,
+        "learning_rate": 1e-3,
         "summary_steps": 1000,
         "first_decay_steps": 1000,
-        "alpha": 1.2,
+        "alpha": 0.1,
         "seed": 0,
-        
-        # TODO 3: 分布假设相关参数
-        "pred_loss_dist": "bernoulli", 
-        "t_df": 3.0,
-        
-        # 残差分析配置
-        "do_residual_analysis": True,
-        "residual_batches": 200,
+
+        # 新增配置
+        "sdp_check_freq": 1,   # 每几个 epoch 检查一次
+        "sdp_epsilon": 0.1,    # 鲁棒性验证的扰动半径
     }
 
     # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -75,15 +140,9 @@ def main():
     parser.add_argument("--num_epochs", type=int, default=config["num_epochs"])
     parser.add_argument("--learning_rate", type=float, default=config["learning_rate"])
     parser.add_argument("--alpha", type=float, default=config["alpha"])
-    parser.add_argument("--seed", type=int, default=config["seed"])
-    
-    # TODO 3 相关参数
-    parser.add_argument("--pred_loss_dist", type=str, default=config["pred_loss_dist"],
-                        choices=["bernoulli", "normal", "laplace", "t"],
-                        help="Distribution assumption for prediction loss.")
-    parser.add_argument("--t_df", type=float, default=config["t_df"], help="Degrees of freedom for Student-t distribution")
-    parser.add_argument("--do_residual_analysis", action="store_true", default=config["do_residual_analysis"])
-    parser.add_argument("--residual_batches", type=int, default=config["residual_batches"])
+    # 新增参数
+    parser.add_argument("--sdp_check_freq", type=int, default=config["sdp_check_freq"], help="Frequency of SDP checks (epochs)")
+    parser.add_argument("--sdp_epsilon", type=float, default=config["sdp_epsilon"], help="Epsilon for robustness verification")
 
     args = parser.parse_args()
 
@@ -91,19 +150,13 @@ def main():
     for k in vars(args):
         config[k] = getattr(args, k)
 
-    # 动态生成 model_path 以区分实验 (如果用户没有指定特殊的路径)
-    if config['model_path'] == './model/exp_todo3_default':
-        exp_name = f"{config['model_class_name']}_dist={config['pred_loss_dist']}_seed={config['seed']}"
-        config["model_path"] = os.path.join("./model", exp_name)
-
     print("--- 运行配置 ---")
     print(f"Model Class: {config['model_class_name']}")
-    print(f"Pred Loss Dist: {config['pred_loss_dist']}")
+    print(f"Alpha: {config['alpha']}")
     print(f"Model Path: {config['model_path']}")
     print("--------------------")
 
     os.makedirs(config["model_path"], exist_ok=True)
-    set_global_seed(config["seed"])
 
     # -------------------- 分布式策略 --------------------
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
@@ -157,8 +210,6 @@ def main():
         try:
             model = model_class(
                 alpha=config["alpha"],
-                pred_loss_dist=config["pred_loss_dist"],
-                t_df=config["t_df"]
             )
         except TypeError:
             # 如果使用的是不接受这些参数的旧模型 (如 base_DFCL)，则回退到无参数初始化
@@ -170,7 +221,7 @@ def main():
             config["first_decay_steps"],
             t_mul=2.0, m_mul=0.9, alpha=0.01,
         )
-        optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=100)
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
         
         model.compile(optimizer=optimizer, loss=None)
 
@@ -190,6 +241,13 @@ def main():
 
     # -------------------- Callbacks --------------------
     epoch_metrics_callback = EpochMetricsCallback(log_dir=os.path.join(config["model_path"], "logs"))
+    # 新增：实例化 SDP 回调
+    sdp_callback = SDPVerificationCallback(
+        val_dataset=val_samples,
+        log_dir=os.path.join(config["model_path"], "logs"),
+        check_freq=config["sdp_check_freq"],
+        epsilon=config["sdp_epsilon"]
+    )
     callbacks = [
         tf.keras.callbacks.ModelCheckpoint(
             filepath=os.path.join(checkpoint_dir, "best_model.ckpt"),
@@ -209,6 +267,7 @@ def main():
             restore_best_weights=True,
         ),
         epoch_metrics_callback,
+        sdp_callback,
     ]
 
     # -------------------- 训练 --------------------
@@ -224,19 +283,6 @@ def main():
     # -------------------- 保存模型 --------------------
     print(f"训练完成，正在将模型保存到: {config['model_path']}")
     model.save(config["model_path"])
-
-    # -------------------- TODO 3: 残差分布分析 --------------------
-    if config["do_residual_analysis"]:
-        print(f"\n[ResidualAnalysis] 开始执行后验分析...")
-        out_dir = os.path.join(config["model_path"], "residual_analysis_results")
-        
-        analyze_residual_distribution(
-            model=model,
-            dataset=val_samples,
-            output_dir=out_dir,
-            num_batches=config["residual_batches"],
-        )
-        print(f"[ResidualAnalysis] 分析完成，结果见: {out_dir}")
 
 if __name__ == "__main__":
     main()

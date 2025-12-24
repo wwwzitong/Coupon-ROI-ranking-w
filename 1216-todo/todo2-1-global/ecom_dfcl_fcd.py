@@ -1,7 +1,14 @@
 import tensorflow as tf
-import json
+import os
+import sys
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
 from data_utils import *
+
 # 1120修改，将treatment纳入特征，形成标准的预测网络
 SPARSE_FEATURE_NAME = ["treatment"]
 DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
@@ -14,6 +21,61 @@ statistical_config={
     'N0':1677550
 }
 
+
+# ===== 新增：全局统计量预计算（raw / log1p）=====
+def _safe_log1p_nonneg(x):
+    x = tf.maximum(x, 0.0)
+    return tf.math.log1p(x)
+
+def compute_global_dense_stats(dataset, dense_feature_names):
+    """
+    dataset: tf.data.Dataset, element = (features, labels) 或 features
+    返回：raw_mean, raw_std, log_mean, log_std（均为 dict[name] = tf.Tensor 标量）
+    """
+    sum_raw  = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
+    sumsq_raw= {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
+    sum_log  = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
+    sumsq_log= {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
+    cnt      = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
+
+    for elem in dataset:
+        features = elem[0] if isinstance(elem, (tuple, list)) else elem
+
+        for n in dense_feature_names:
+            x = tf.cast(features[n], tf.float64)
+            x = tf.reshape(x, [-1])                # [B]
+            c = tf.cast(tf.size(x), tf.float64)    # 标量 count
+
+            # raw
+            sum_raw[n].assign_add(tf.reduce_sum(x))
+            sumsq_raw[n].assign_add(tf.reduce_sum(tf.square(x)))
+
+            # log1p(clip>=0)
+            xlog = tf.cast(_safe_log1p_nonneg(tf.cast(x, tf.float32)), tf.float64)
+            sum_log[n].assign_add(tf.reduce_sum(xlog))
+            sumsq_log[n].assign_add(tf.reduce_sum(tf.square(xlog)))
+
+            cnt[n].assign_add(c)
+
+    raw_mean, raw_std, log_mean, log_std = {}, {}, {}, {}
+    eps = tf.constant(1e-8, dtype=tf.float64)
+
+    for n in dense_feature_names:
+        c = tf.maximum(cnt[n], 1.0)
+        m_raw = sum_raw[n] / c
+        v_raw = tf.maximum(sumsq_raw[n] / c - tf.square(m_raw), 0.0)
+        raw_mean[n] = tf.cast(m_raw, tf.float32)
+        raw_std[n]  = tf.cast(tf.sqrt(v_raw + eps), tf.float32)
+
+        m_log = sum_log[n] / c
+        v_log = tf.maximum(sumsq_log[n] / c - tf.square(m_log), 0.0)
+        log_mean[n] = tf.cast(m_log, tf.float32)
+        log_std[n]  = tf.cast(tf.sqrt(v_log + eps), tf.float32)
+
+    return raw_mean, raw_std, log_mean, log_std
+
+# ===== 新增结束 =====
+
 class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
@@ -21,13 +83,12 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     def __init__(self, alpha=1.2, **kwargs):
         self.loss_function = kwargs.pop('loss_function', "2pll")
+        # ===== 新增：fcd 全局统计量 & 模式开关 =====
+        self.use_global_fcd_stats = kwargs.pop('use_global_fcd_stats', True)
+        # 可选：'raw' | 'log1p'
+        self.fcd_mode = kwargs.pop('fcd_mode', 'log1p')
 
         super().__init__(**kwargs)
-
-        # 加载变换参数
-        with open(transform_params_path, 'r') as f:
-            self.transform_params = json.load(f)
-
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
         self.alpha = alpha #prediction loss前面的系数
@@ -38,12 +99,24 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         self.sparse_feature_slot_map = SPARSE_FEATURE_NAME_SLOT_ID
         self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
 
+        # ===== 新增 =====
+        self._dense_idx = {n: i for i, n in enumerate(self.dense_feature_names)}
+        self._global_stats_ready = False
+
+        # 先占位（后续用 set_global_fcd_stats 填充）
+        self.global_raw_mean = None
+        self.global_raw_std  = None
+        self.global_log_mean = None
+        self.global_log_std  = None
+        # ===== 新增结束 =====
+
         # 模型超参数 TODO：需要依据实际数据集进行修改
         self.sparse_feature_dim = 8 # TODO：简化为4
         self.dense_feature_dim = 1
         self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
 #         self.ratios = [0.1, 0.5, 1.0]  #先用少量测试
         self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
+        # self.targets = ['paid', 'cost']
         self.targets = ['paid', 'cost']
         
         self.total_samples = statistical_config['N']
@@ -121,35 +194,17 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 name="embedding_slot_{}".format(slot_id)
             )
 
-    def box_cox_transform(self, x, lmbda):
-        """TensorFlow 实现的 Box-Cox 变换"""
-        epsilon = 1e-6
-        x = tf.maximum(x, epsilon)  # 确保正值
-        
-        if abs(lmbda) < 1e-6:
-            return tf.math.log(x)
-        else:
-            return (tf.pow(x, lmbda) - 1.0) / lmbda
-    
-    def yeo_johnson_transform(self, x, lmbda):
-        """TensorFlow 实现的 Yeo-Johnson 变换"""
-        epsilon = 1e-6
-        
-        # Case 1: x >= 0, lambda != 0
-        case1 = (tf.pow(x + 1, lmbda) - 1) / lmbda
-        # Case 2: x >= 0, lambda == 0
-        case2 = tf.math.log(x + 1)
-        # Case 3: x < 0, lambda != 2
-        case3 = -(tf.pow(-x + 1, 2 - lmbda) - 1) / (2 - lmbda)
-        # Case 4: x < 0, lambda == 2
-        case4 = -tf.math.log(-x + 1)
-        
-        result = tf.where(
-            x >= 0,
-            tf.where(tf.abs(lmbda) < epsilon, case2, case1),
-            tf.where(tf.abs(lmbda - 2) < epsilon, case4, case3)
-        )
-        return result
+    # ===== 新增：注入全局统计量（raw/log）=====
+    def set_global_fcd_stats(self, raw_mean, raw_std, log_mean, log_std):
+        """
+        入参都是 dict[name] = 标量 tensor/float
+        """
+        self.global_raw_mean = tf.constant([raw_mean[n] for n in self.dense_feature_names], dtype=tf.float32)
+        self.global_raw_std  = tf.constant([raw_std[n]  for n in self.dense_feature_names], dtype=tf.float32)
+        self.global_log_mean = tf.constant([log_mean[n] for n in self.dense_feature_names], dtype=tf.float32)
+        self.global_log_std  = tf.constant([log_std[n]  for n in self.dense_feature_names], dtype=tf.float32)
+        self._global_stats_ready = True
+    # ===== 新增结束 =====
 
     def call(self, inputs, training=True): # 定义数据从输入到输出的完整流动路径       
         # 特征处理
@@ -179,19 +234,28 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 # 保存原始分布 (展平以便计算统计量)
                 self._last_raw_inputs[feature_name] = tf.reshape(raw_val, [-1])
 
-            fcd = inputs[feature_name]
+            # ======= 修改开始 =======
+            x = tf.cast(inputs[feature_name], tf.float32)
 
-            params = self.transform_params[feature_name]
+            # 选择 fcd 口径：raw / log1p
+            if self.fcd_mode == "raw":
+                fcd_in = x
+            else:  # "log1p" (默认)
+                fcd_in = tf.math.log1p(tf.maximum(x, 0.0))
 
-            # 应用变换
-            if params['method'] == 'box-cox':
-                fcd = self.box_cox_transform(fcd, params['lambda'])
-            else:  # yeo-johnson
-                fcd = self.yeo_johnson_transform(fcd, params['lambda'])
-            
-            # 标准化
-            fcd = (fcd - params['mean']) / (params['std'] + 1e-8)
-            
+            # 用固定全局统计量做标准化（若没 set，则回退到 batch 统计量，方便你先跑通）
+            if self.use_global_fcd_stats and self._global_stats_ready:
+                idx = self._dense_idx[feature_name]
+                if self.fcd_mode == "raw":
+                    mean = self.global_raw_mean[idx]
+                    std  = self.global_raw_std[idx]
+                else:
+                    mean = self.global_log_mean[idx]
+                    std  = self.global_log_std[idx]
+                fcd = (fcd_in - mean) / (std + 1e-8)
+            else:
+                fcd = (fcd_in - tf.reduce_mean(fcd_in)) / (tf.math.reduce_std(fcd_in) + 1e-8)
+            # ======= 修改结束 =======
 
             # fcd = inputs[feature_name]
             # fcd = tf.math.log1p(tf.maximum(fcd,0.0))

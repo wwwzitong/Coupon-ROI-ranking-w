@@ -5,9 +5,13 @@ import argparse
 import inspect
 import tensorflow as tf
 import numpy as np
-
+import os
+import sys
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
 from data_utils import *
-from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
+from ecom_dfcl_boxcox import EcomDFCL_v3, DENSE_FEATURE_NAME
 # from base_NNmodel import basemodel
 # from base_DFCL import base_DFCL
 # from res_base_DFCL import res_base_DFCL
@@ -40,20 +44,20 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 # ==================== 1. 默认配置 ====================
 config = {
-    'model_class_name': 'base_DFCL',
-    'model_path': './model/base_DFCL_2pll_2pos_gradient_lr3_CD_alpha=0.5',
+    'model_class_name': 'EcomDFCL_v3',
+    'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
     'loss_function': '2pll',  # 3erl, ...
     'alpha': 0.1,
     'last_model_path': '',
-    'train_data': 'data/criteo_train.csv',
-    'val_data': 'data/criteo_val.csv',
+    'train_data': '../../data/criteo_train.csv',
+    'val_data': '../../data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
-    'learning_rate': 0.0001,
+    'learning_rate': 0.001,
     'summary_steps': 1000,
     'first_decay_steps': 1000,
-    # ✅ 新增：boxcox 参数文件路径（运行时会自动设置到 model_path 下）
-    'transform_params_path': ''
+    'transform_params_path': '',
+    'clipnorm': 5e3,
 }
 
 
@@ -67,18 +71,23 @@ parser.add_argument('--loss_function', type=str, default=config['loss_function']
                     help='The expression of decision loss function.')
 parser.add_argument('--alpha', type=float, default=config['alpha'],
                     help='Alpha value for the loss function.')
+parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+
 args = parser.parse_args()
 
 config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
 config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
+config['clipnorm'] = args.clipnorm
+
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"Decision Loss Function: {config['loss_function']}")
 print(f"Alpha: {config['alpha']}")
+print(f"clipnorm: {config['clipnorm']}")
 print("--------------------")
 
 

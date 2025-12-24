@@ -71,7 +71,7 @@ class DistributionFitter:
             'params': ['loc', 'scale'],
             'description': 'Cauchy Distribution (极重尾)'
         },
-        'bernou·········lli': {
+        'bernoulli': {
             'scipy': stats.bernoulli,
             'params': ['p', 'loc'],
             'description': 'Bernoulli Distribution (0/1 二元分布，离散)'
