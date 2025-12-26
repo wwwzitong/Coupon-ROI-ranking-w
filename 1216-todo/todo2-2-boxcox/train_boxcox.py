@@ -7,6 +7,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import sys
+import shutil
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
@@ -171,34 +172,34 @@ with strategy.scope():
 
     model = model_class(**init_kwargs)
 
-    lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
-        config['learning_rate'],
-        config['first_decay_steps'],
-        t_mul=2.0,
-        m_mul=0.9,
-        alpha=0.01
-    )
-    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
-
+    # lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
+    #     config['learning_rate'],
+    #     config['first_decay_steps'],
+    #     t_mul=2.0,
+    #     m_mul=0.9,
+    #     alpha=0.01
+    # )
+    # optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
     model.compile(optimizer=optimizer, loss=None)
 
 
-# ==================== 8. 加载检查点 ====================
+# ==================== 每次都从头开始：删除旧模型目录，禁止从检查点恢复 ====================
+if os.path.exists(config['model_path']):
+    print(f"[Reset] 删除已有模型目录: {config['model_path']}")
+    shutil.rmtree(config['model_path'])
+
+# 重建必要目录
+os.makedirs(config['model_path'], exist_ok=True)
+
 checkpoint_dir = os.path.join(config['model_path'], 'checkpoints')
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+log_dir = os.path.join(config['model_path'], 'logs')
+os.makedirs(log_dir, exist_ok=True)
 
-if latest_checkpoint:
-    print(f"从最新检查点恢复: {latest_checkpoint}")
-    model.load_weights(latest_checkpoint)
+print("[Reset] 已清空并重建输出目录，将从随机初始化开始训练（不恢复任何 checkpoint）。")
 
-elif config['last_model_path']:
-    warmup_dir = os.path.join(config['last_model_path'], 'checkpoints')
-    warmup_checkpoint = tf.train.latest_checkpoint(warmup_dir)
-    if warmup_checkpoint:
-        print(f"从上一个模型检查点热启动: {warmup_checkpoint}")
-        model.load_weights(warmup_checkpoint)
 
 
 # ==================== 9. callbacks ====================

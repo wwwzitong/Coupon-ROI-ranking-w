@@ -4,13 +4,13 @@ import sys
 
 # 1. 配置基础参数
 base_command = [
-    "python", "train_copy.py",
-    "--model_class_name", "DCN_base_DFCL",
-    "--alpha", "1.2"
+    "python", "train.py",
+    "--model_class_name", "EcomDFCL_v3",
+    "--alpha", "0.1"
 ]
 
 # 原始保存路径
-base_model_path = "./model/DCN_base_DFCL_2pll_2pos_gradient_lr4_alpha=1.2"
+base_model_path = "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1"
 
 # 运行次数
 num_runs = 5

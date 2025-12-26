@@ -1,16 +1,17 @@
 from __future__ import print_function, absolute_import, division
 import os
 import tensorflow as tf
+import argparse
 # from tensorflow import keras
 import numpy as np
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 from data_utils import *
-from ecom_dfcl import EcomDFCL
-from ecom_dfcl_copy_0926 import EcomDFCL_re
-from ecom_drm import EcomDRM19
-from ecom_dfl import EcomDFL
-from ecom_dfcl_gradnorm import EcomDFCL_gradnorm
-from ecom_slearner import EcomDFCL_only_pl
+from ecom_dfcl import EcomDFCL_v3
+# from ecom_dfcl_copy_0926 import EcomDFCL_re
+# from ecom_drm import EcomDRM19
+# from ecom_dfl import EcomDFL
+# from ecom_dfcl_gradnorm import EcomDFCL_gradnorm
+# from ecom_slearner import EcomDFCL_only_pl
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
@@ -48,17 +49,47 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
-    'model_class_name': 'EcomDFCL',
-    'model_path': './model_1106_alpha/ecom_DFCL_pll_2pos_std_500_',
+    'model_class_name': 'EcomDFCL_v3',
+    'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
     'last_model_path': '',
-    'train_data': '../WangHe/data/criteo_train.csv', 
-    'val_data': '../WangHe/data/criteo_val.csv',
+    'loss_function': '2pll',  # 3erl, 
+    'train_data': './data/criteo_train.csv', 
+    'val_data': './data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
     'learning_rate': 0.001,
     'summary_steps': 1000,
+    'alpha': 0.1,
+    'clipnorm': 5e3,
 }
 
+parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
+parser.add_argument('--model_class_name', type=str, default=config['model_class_name'],
+                    help='The name of the model class to train.')
+parser.add_argument('--model_path', type=str, default=config['model_path'],
+                    help='The path to save the model and logs.')
+parser.add_argument('--loss_function', type=str, default=config['loss_function'],
+                    help='The expression of decision loss function.')
+parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
+parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+
+args = parser.parse_args()
+
+# 使用命令行参数更新 config 字典
+config['model_class_name'] = args.model_class_name
+config['model_path'] = args.model_path
+config['loss_function'] = args.loss_function
+config['alpha'] = args.alpha
+config['clipnorm'] = args.clipnorm
+
+
+print("--- 运行配置 ---")
+print(f"Model Class: {config['model_class_name']}")
+print(f"Model Path: {config['model_path']}")
+print(f"Decision Loss Function: {config['loss_function']}")
+print(f"Alpha: {config['alpha']}")
+print(f"clipnorm: {config['clipnorm']}")
+print("--------------------")
 
 # In[9]:
 
@@ -73,8 +104,8 @@ global_batch_size = config['batch_size'] * strategy.num_replicas_in_sync
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class()
-    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=5e3)
+    model = model_class(alpha = config['alpha'])
+    optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
     #optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
     model.compile(
         optimizer=optimizer,loss=None
@@ -129,10 +160,9 @@ callbacks = [
 dataset = CSVData()
 train_samples = dataset.prepare_dataset(config['train_data'], phase='train', batch_size=global_batch_size, shuffle=True)
 # --- Step: 提取 drop_list 和 label_name_list ---
-id_list = []
 
-label_name_list = ['treatment','conversion','visit']
-drop_list = id_list + label_name_list
+label_name_list = ['treatment','paid','cost']
+drop_list = ['paid','cost']
 # --- Step: 将 dataset 转换为 (features, labels) 格式 ---
 def _to_features_labels(parsed_example):
     # 提取 features（从 feature_name_list 中）

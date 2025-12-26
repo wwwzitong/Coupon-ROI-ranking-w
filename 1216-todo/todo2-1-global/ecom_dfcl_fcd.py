@@ -1,8 +1,8 @@
 import tensorflow as tf
-import os
-import sys
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 
+import os
+import sys
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
@@ -22,72 +22,12 @@ statistical_config={
 }
 
 
-# ===== 新增：全局统计量预计算（raw / log1p）=====
-def _safe_log1p_nonneg(x):
-    x = tf.maximum(x, 0.0)
-    return tf.math.log1p(x)
-
-def compute_global_dense_stats(dataset, dense_feature_names):
-    """
-    dataset: tf.data.Dataset, element = (features, labels) 或 features
-    返回：raw_mean, raw_std, log_mean, log_std（均为 dict[name] = tf.Tensor 标量）
-    """
-    sum_raw  = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
-    sumsq_raw= {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
-    sum_log  = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
-    sumsq_log= {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
-    cnt      = {n: tf.Variable(0.0, dtype=tf.float64, trainable=False) for n in dense_feature_names}
-
-    for elem in dataset:
-        features = elem[0] if isinstance(elem, (tuple, list)) else elem
-
-        for n in dense_feature_names:
-            x = tf.cast(features[n], tf.float64)
-            x = tf.reshape(x, [-1])                # [B]
-            c = tf.cast(tf.size(x), tf.float64)    # 标量 count
-
-            # raw
-            sum_raw[n].assign_add(tf.reduce_sum(x))
-            sumsq_raw[n].assign_add(tf.reduce_sum(tf.square(x)))
-
-            # log1p(clip>=0)
-            xlog = tf.cast(_safe_log1p_nonneg(tf.cast(x, tf.float32)), tf.float64)
-            sum_log[n].assign_add(tf.reduce_sum(xlog))
-            sumsq_log[n].assign_add(tf.reduce_sum(tf.square(xlog)))
-
-            cnt[n].assign_add(c)
-
-    raw_mean, raw_std, log_mean, log_std = {}, {}, {}, {}
-    eps = tf.constant(1e-8, dtype=tf.float64)
-
-    for n in dense_feature_names:
-        c = tf.maximum(cnt[n], 1.0)
-        m_raw = sum_raw[n] / c
-        v_raw = tf.maximum(sumsq_raw[n] / c - tf.square(m_raw), 0.0)
-        raw_mean[n] = tf.cast(m_raw, tf.float32)
-        raw_std[n]  = tf.cast(tf.sqrt(v_raw + eps), tf.float32)
-
-        m_log = sum_log[n] / c
-        v_log = tf.maximum(sumsq_log[n] / c - tf.square(m_log), 0.0)
-        log_mean[n] = tf.cast(m_log, tf.float32)
-        log_std[n]  = tf.cast(tf.sqrt(v_log + eps), tf.float32)
-
-    return raw_mean, raw_std, log_mean, log_std
-
-# ===== 新增结束 =====
-
 class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型集成了 GradNorm 和自定义决策损失。
     """
-    def __init__(self, alpha=1.2, **kwargs):
-        self.loss_function = kwargs.pop('loss_function', "2pll")
-        # ===== 新增：fcd 全局统计量 & 模式开关 =====
-        self.use_global_fcd_stats = kwargs.pop('use_global_fcd_stats', True)
-        # 可选：'raw' | 'log1p'
-        self.fcd_mode = kwargs.pop('fcd_mode', 'log1p')
-
+    def __init__(self, alpha=1.2, dense_stats=None, fcd_mode='log1p', loss_function='2pll', **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
@@ -100,14 +40,32 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
 
         # ===== 新增 =====
-        self._dense_idx = {n: i for i, n in enumerate(self.dense_feature_names)}
-        self._global_stats_ready = False
+        # dense_stats 期望格式：
+        # {
+        #   "raw":   {"mean": [..], "std": [..]},
+        #   "log1p": {"mean": [..], "std": [..]}
+        # }
+        self.fcd_mode = fcd_mode
+        self._dense_global_mean = None  # shape: [num_dense]
+        self._dense_global_std = None   # shape: [num_dense]
+        if dense_stats is not None:
+            stats_obj = dense_stats.get(self.fcd_mode, dense_stats)
+            mean_list = stats_obj.get("mean")
+            std_list = stats_obj.get("std")
+            if mean_list is None or std_list is None:
+                raise ValueError(f"dense_stats 缺少 mean/std: keys={list(stats_obj.keys())}")
 
-        # 先占位（后续用 set_global_fcd_stats 填充）
-        self.global_raw_mean = None
-        self.global_raw_std  = None
-        self.global_log_mean = None
-        self.global_log_std  = None
+            mean = tf.convert_to_tensor(mean_list, dtype=tf.float32)
+            std = tf.convert_to_tensor(std_list, dtype=tf.float32)
+
+            self._dense_global_mean = mean
+            self._dense_global_std = std
+        # # 先放占位，真正值由 set_global_fcd_stats() 注入
+        # n_dense = len(self.dense_feature_names)
+        # self.global_raw_mean = tf.zeros([n_dense], dtype=tf.float32)
+        # self.global_raw_std  = tf.ones([n_dense], dtype=tf.float32)
+        # self.global_log_mean = tf.zeros([n_dense], dtype=tf.float32)
+        # self.global_log_std  = tf.ones([n_dense], dtype=tf.float32)
         # ===== 新增结束 =====
 
         # 模型超参数 TODO：需要依据实际数据集进行修改
@@ -194,16 +152,25 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 name="embedding_slot_{}".format(slot_id)
             )
 
-    # ===== 新增：注入全局统计量（raw/log）=====
-    def set_global_fcd_stats(self, raw_mean, raw_std, log_mean, log_std):
-        """
-        入参都是 dict[name] = 标量 tensor/float
-        """
-        self.global_raw_mean = tf.constant([raw_mean[n] for n in self.dense_feature_names], dtype=tf.float32)
-        self.global_raw_std  = tf.constant([raw_std[n]  for n in self.dense_feature_names], dtype=tf.float32)
-        self.global_log_mean = tf.constant([log_mean[n] for n in self.dense_feature_names], dtype=tf.float32)
-        self.global_log_std  = tf.constant([log_std[n]  for n in self.dense_feature_names], dtype=tf.float32)
-        self._global_stats_ready = True
+    # # ===== 新增：注入全局统计量（raw/log）=====
+    # def set_global_fcd_stats(self, raw_mean, raw_std, log_mean, log_std):
+    #     """
+    #     raw_mean/raw_std/log_mean/log_std:
+    #     - 可以是 dict: {feature_name: float}
+    #     - 或 list/np.array: 顺序必须和 self.dense_feature_names 一致
+    #     """
+    #     names = self.dense_feature_names
+
+    #     def _to_vec(x):
+    #         if isinstance(x, dict):
+    #             return [float(x[n]) for n in names]
+    #         return [float(v) for v in x]
+
+    #     self.global_raw_mean = tf.constant(_to_vec(raw_mean), dtype=tf.float32)
+    #     self.global_raw_std  = tf.constant(_to_vec(raw_std),  dtype=tf.float32)
+    #     self.global_log_mean = tf.constant(_to_vec(log_mean), dtype=tf.float32)
+    #     self.global_log_std  = tf.constant(_to_vec(log_std),  dtype=tf.float32)
+
     # ===== 新增结束 =====
 
     def call(self, inputs, training=True): # 定义数据从输入到输出的完整流动路径       
@@ -225,7 +192,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             embedding_vector = self.embedding_layers[slot_id](hashed_output)
             sparse_vectors.append(embedding_vector)
 
-        for feature_name in self.dense_feature_names:
+        for i, feature_name in enumerate(self.dense_feature_names):
             # fcd变换之前记录数据分布
             raw_val = inputs[feature_name]
             if training:
@@ -235,39 +202,32 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 self._last_raw_inputs[feature_name] = tf.reshape(raw_val, [-1])
 
             # ======= 修改开始 =======
-            x = tf.cast(inputs[feature_name], tf.float32)
-
-            # 选择 fcd 口径：raw / log1p
-            if self.fcd_mode == "raw":
-                fcd_in = x
-            else:  # "log1p" (默认)
-                fcd_in = tf.math.log1p(tf.maximum(x, 0.0))
-
-            # 用固定全局统计量做标准化（若没 set，则回退到 batch 统计量，方便你先跑通）
-            if self.use_global_fcd_stats and self._global_stats_ready:
-                idx = self._dense_idx[feature_name]
-                if self.fcd_mode == "raw":
-                    mean = self.global_raw_mean[idx]
-                    std  = self.global_raw_std[idx]
-                else:
-                    mean = self.global_log_mean[idx]
-                    std  = self.global_log_std[idx]
-                fcd = (fcd_in - mean) / (std + 1e-8)
+            fcd = tf.cast(inputs[feature_name], tf.float32)
+            fcd = tf.maximum(fcd, 0.0)
+            if self.fcd_mode == 'log1p':
+                fcd = tf.math.log1p(fcd)
+            
+            if self._dense_global_mean is not None and self._dense_global_std is not None:
+                mean = self._dense_global_mean[i]
+                std = self._dense_global_std[i]
+                fcd = (fcd - mean) / (std + 1e-8)
             else:
-                fcd = (fcd_in - tf.reduce_mean(fcd_in)) / (tf.math.reduce_std(fcd_in) + 1e-8)
+                fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
+
+            dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
             # ======= 修改结束 =======
 
             # fcd = inputs[feature_name]
             # fcd = tf.math.log1p(tf.maximum(fcd,0.0))
             # fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
-            dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
+            # dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
 
             # fcd变换之后记录数据分布
             if training:
                 if not hasattr(self, "_last_fcd"):
                     self._last_fcd = {}
                 self._last_fcd[feature_name] = tf.reshape(fcd, [-1])  # 展平成一维便于 histogram
-
+        
         concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
         
 #         shared_output = self.user_tower(concat_input, training=training)

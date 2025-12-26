@@ -20,8 +20,8 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     def __init__(self, alpha=1.2, **kwargs):
         super().__init__(**kwargs)
-        self.conversion_pos_weight = 99.71/(100-99.71)
-        self.visit_pos_weight= 95.30/(100-95.30)
+        self.paid_pos_weight = 99.71/(100-99.71)
+        self.cost_pos_weight= 95.30/(100-95.30)
         self.alpha = alpha #prediction loss前面的系数
         
         # 从 fsfc.py 导入配置
@@ -36,7 +36,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
 #         self.ratios = [0.1, 0.5, 1.0]  #先用少量测试
         self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
-        self.targets = ['conversion', 'visit']
+        self.targets = ['paid', 'cost']
         
         self.total_samples = statistical_config['N']
         self.treatment_sample_counts = {
@@ -156,7 +156,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         treatment_embedding = sparse_vectors[0]
         tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
         for name, tower in self.task_towers.items():
-            # name is like "conversion_treatment_30_tower"
+            # name is like "paid_treatment_30_tower"
             pred_name = name.replace('_tower', '')
             logit = tower(tower_input, training=training)
             predictions[pred_name] = tf.reshape(logit, [-1])
@@ -166,17 +166,17 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         return predictions
     
     def compute_local_losses(self, predictions, labels): #和论文不一致啊
-        conversion_loss = tf.constant(0.0, dtype=tf.float32)
-        visit_loss = tf.constant(0.0, dtype=tf.float32)
+        paid_loss = tf.constant(0.0, dtype=tf.float32)
+        cost_loss = tf.constant(0.0, dtype=tf.float32)
 
         # 预先计算 treatment_mask（只一次）
         treatment_idx = tf.cast(labels['treatment'], tf.int32)
 
         for target_name in self.targets:
-            if target_name == 'conversion':
-                pos_weight = self.conversion_pos_weight
+            if target_name == 'paid':
+                pos_weight = self.paid_pos_weight
             else:
-                pos_weight = self.visit_pos_weight
+                pos_weight = self.cost_pos_weight
             local_loss = tf.constant(0.0, dtype=tf.float32)
             for treatment in self.treatment_order:
                 pred_name = f"{target_name}_treatment_{treatment}"
@@ -204,12 +204,12 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 # ✅ 累加 sum
                 local_loss += tf.reduce_sum(masked_loss)
 
-            if target_name == 'conversion':
-                conversion_loss += local_loss
+            if target_name == 'paid':
+                paid_loss += local_loss
             else:
-                visit_loss += local_loss
+                cost_loss += local_loss
 
-        return conversion_loss, visit_loss
+        return paid_loss, cost_loss
 
     def decision_policy_learning_loss(self, predictions, labels): #decision loss也和论文有出入
         '''
@@ -243,7 +243,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         for ratio in self.ratios:
             # 使用列表推导，避免显式 append
             values = [
-                pred_dict[f"conversion_treatment_{t}"] - ratio * pred_dict[f"visit_treatment_{t}"]
+                pred_dict[f"paid_treatment_{t}"] - ratio * pred_dict[f"cost_treatment_{t}"]
                 for t in self.treatment_order
             ]
             cancat_tensor = tf.nn.softmax(tf.stack(values, axis=1), axis=1)
@@ -251,7 +251,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             # mask_tensor 是 one-hot 编码
             mask_tensor = tf.stack([treatment_masks[t] for t in self.treatment_order], axis=1)
 
-            ratio_target = tf.reshape(labels['conversion'] - ratio * labels['visit'], [-1, 1])#样本的真实收益
+            ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1])#样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
             decision_loss = tf.reduce_sum(cancat_tensor * mask_tensor * ratio_target * weight_tensor)
 
@@ -290,7 +290,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         for ratio in self.ratios: # 模拟决策过程
             cancat_list, mask_list = [], []
             for treatment in self.treatment_order:
-                v = pred_dict["conversion_treatment_{}".format(treatment)] - ratio * pred_dict["visit_treatment_{}".format(treatment)]
+                v = pred_dict["paid_treatment_{}".format(treatment)] - ratio * pred_dict["cost_treatment_{}".format(treatment)]
                 cancat_list.append(tf.reshape(v, [-1, 1]))
                 
                 treatment_idx = tf.cast(labels['treatment'], tf.int32)
@@ -302,7 +302,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             softmax_tensor = tf.nn.softmax(cancat_tensor / tau, axis=1)
             
             mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
-            ratio_target = tf.reshape(labels['conversion'] - ratio * labels['visit'], [-1, 1]) #样本的真实收益
+            ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
             decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target* weight_tensor)
             decision_loss_sum += decision_loss
@@ -325,9 +325,9 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         max_grad_magnitude = 10.0  # 限制梯度最大幅度
         
         # 初始化总梯度累加器
-        total_conversion_grads = {f"conversion_treatment_{t}": tf.zeros_like(predictions[f"conversion_treatment_{t}"])
+        total_paid_grads = {f"paid_treatment_{t}": tf.zeros_like(predictions[f"paid_treatment_{t}"])
                         for t in self.treatment_order}
-        total_visit_grads = {f"visit_treatment_{t}": tf.zeros_like(predictions[f"visit_treatment_{t}"])
+        total_cost_grads = {f"cost_treatment_{t}": tf.zeros_like(predictions[f"cost_treatment_{t}"])
                             for t in self.treatment_order}
 
         # 获取样本数和treatment数
@@ -346,7 +346,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         # 对每个λ(ratio)计算梯度
         for ratio in self.ratios:
             # 计算每个样本每个treatment的得分 a_ij = r_hat_ij - λ * c_hat_ij
-            a_values = {t: predictions[f"conversion_treatment_{t}"] - ratio * predictions[f"visit_treatment_{t}"]
+            a_values = {t: predictions[f"paid_treatment_{t}"] - ratio * predictions[f"cost_treatment_{t}"]
                         for t in self.treatment_order}
 
             # 堆叠所有treatment的得分 [batch_size, num_treatments]
@@ -367,19 +367,19 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             # --- 为 tf.cond 定义分支函数 ---
             def compute_deltas(indices, is_matching_case):
                 """为匹配或不匹配的样本计算梯度增量"""
-                conversion_deltas = {k: tf.zeros_like(v) for k, v in total_conversion_grads.items()}
-                visit_deltas = {k: tf.zeros_like(v) for k, v in total_visit_grads.items()}
+                paid_deltas = {k: tf.zeros_like(v) for k, v in total_paid_grads.items()}
+                cost_deltas = {k: tf.zeros_like(v) for k, v in total_cost_grads.items()}
 
                 indices = tf.squeeze(indices, axis=1)
                 actual_t = tf.gather(treatment_idx, indices)
                 a_sub_matrix = tf.gather(a_matrix, indices)
-                conversion_actual = tf.gather(labels['conversion'], indices)
-                visit_actual = tf.gather(labels['visit'], indices)
+                paid_actual = tf.gather(labels['paid'], indices)
+                cost_actual = tf.gather(labels['cost'], indices)
                 
                 p_t_gathered = tf.gather([p_t_dict[t] for t in self.treatment_order], actual_t)
                 
                 # 【修复2】：限制基础梯度分量的幅度
-                base_grad_component = (conversion_actual - ratio * visit_actual) / (N * p_t_gathered)
+                base_grad_component = (paid_actual - ratio * cost_actual) / (N * p_t_gathered)
                 base_grad_component = tf.clip_by_value(base_grad_component, -max_grad_magnitude, max_grad_magnitude)
 
                 if is_matching_case:
@@ -409,13 +409,13 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                         total_update_r = tf.where(is_actual_t_mask, update_r, update_r_other)
                         total_update_c = tf.where(is_actual_t_mask, update_c, update_c_other)
 
-                        conversion_deltas[f"conversion_treatment_{t}"] = tf.tensor_scatter_nd_add(
-                            conversion_deltas[f"conversion_treatment_{t}"], 
+                        paid_deltas[f"paid_treatment_{t}"] = tf.tensor_scatter_nd_add(
+                            paid_deltas[f"paid_treatment_{t}"], 
                             tf.expand_dims(indices, 1), 
                             total_update_r
                         )
-                        visit_deltas[f"visit_treatment_{t}"] = tf.tensor_scatter_nd_add(
-                            visit_deltas[f"visit_treatment_{t}"], 
+                        cost_deltas[f"cost_treatment_{t}"] = tf.tensor_scatter_nd_add(
+                            cost_deltas[f"cost_treatment_{t}"], 
                             tf.expand_dims(indices, 1), 
                             total_update_c
                         )
@@ -462,23 +462,23 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                         update_r = actual_contrib_r + optimal_contrib_r
                         update_c = actual_contrib_c + optimal_contrib_c
                         
-                        conversion_deltas[f"conversion_treatment_{t}"] = tf.tensor_scatter_nd_add(
-                            conversion_deltas[f"conversion_treatment_{t}"], 
+                        paid_deltas[f"paid_treatment_{t}"] = tf.tensor_scatter_nd_add(
+                            paid_deltas[f"paid_treatment_{t}"], 
                             tf.expand_dims(indices, 1), 
                             update_r
                         )
-                        visit_deltas[f"visit_treatment_{t}"] = tf.tensor_scatter_nd_add(
-                            visit_deltas[f"visit_treatment_{t}"], 
+                        cost_deltas[f"cost_treatment_{t}"] = tf.tensor_scatter_nd_add(
+                            cost_deltas[f"cost_treatment_{t}"], 
                             tf.expand_dims(indices, 1), 
                             update_c
                         )
 
-                return list(conversion_deltas.values()) + list(visit_deltas.values())
+                return list(paid_deltas.values()) + list(cost_deltas.values())
 
             def return_zero_deltas():
                 """返回一个结构正确的零值列表"""
-                return [tf.zeros_like(predictions[f"conversion_treatment_{t}"]) for t in self.treatment_order] + \
-                    [tf.zeros_like(predictions[f"visit_treatment_{t}"]) for t in self.treatment_order]
+                return [tf.zeros_like(predictions[f"paid_treatment_{t}"]) for t in self.treatment_order] + \
+                    [tf.zeros_like(predictions[f"cost_treatment_{t}"]) for t in self.treatment_order]
 
             # --- 使用 tf.cond 独立计算增量 ---
             matching_deltas_list = tf.cond(
@@ -494,50 +494,50 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
 
             # --- 在循环中累加当前 ratio 计算出的梯度 ---
             for i, t in enumerate(self.treatment_order):
-                conversion_key = f"conversion_treatment_{t}"
-                visit_key = f"visit_treatment_{t}"
-                total_conversion_grads[conversion_key] += matching_deltas_list[i] + mismatching_deltas_list[i]
-                total_visit_grads[visit_key] += matching_deltas_list[i + num_treatments] + mismatching_deltas_list[i + num_treatments]
+                paid_key = f"paid_treatment_{t}"
+                cost_key = f"cost_treatment_{t}"
+                total_paid_grads[paid_key] += matching_deltas_list[i] + mismatching_deltas_list[i]
+                total_cost_grads[cost_key] += matching_deltas_list[i + num_treatments] + mismatching_deltas_list[i + num_treatments]
 
         # 【修复5】：对最终梯度进行额外的数值检查和裁剪
-        for key in total_conversion_grads:
-            total_conversion_grads[key] = tf.clip_by_value(
-                total_conversion_grads[key], 
+        for key in total_paid_grads:
+            total_paid_grads[key] = tf.clip_by_value(
+                total_paid_grads[key], 
                 -max_grad_magnitude * len(self.ratios), 
                 max_grad_magnitude * len(self.ratios)
             )
-            total_conversion_grads[key] = tf.where(
-                tf.math.is_finite(total_conversion_grads[key]), 
-                total_conversion_grads[key], 
-                tf.zeros_like(total_conversion_grads[key])
+            total_paid_grads[key] = tf.where(
+                tf.math.is_finite(total_paid_grads[key]), 
+                total_paid_grads[key], 
+                tf.zeros_like(total_paid_grads[key])
             )
         
-        for key in total_visit_grads:
-            total_visit_grads[key] = tf.clip_by_value(
-                total_visit_grads[key], 
+        for key in total_cost_grads:
+            total_cost_grads[key] = tf.clip_by_value(
+                total_cost_grads[key], 
                 -max_grad_magnitude * len(self.ratios), 
                 max_grad_magnitude * len(self.ratios)
             )
-            total_visit_grads[key] = tf.where(
-                tf.math.is_finite(total_visit_grads[key]), 
-                total_visit_grads[key], 
-                tf.zeros_like(total_visit_grads[key])
+            total_cost_grads[key] = tf.where(
+                tf.math.is_finite(total_cost_grads[key]), 
+                total_cost_grads[key], 
+                tf.zeros_like(total_cost_grads[key])
             )
 
         # 构建有限差分损失（梯度与预测值的点积）
         ifdl_loss = tf.constant(0.0, dtype=tf.float32)
         for t in self.treatment_order:
-            conversion_key = f"conversion_treatment_{t}"
-            visit_key = f"visit_treatment_{t}"
+            paid_key = f"paid_treatment_{t}"
+            cost_key = f"cost_treatment_{t}"
             
             # 【修复6】：对点积结果也进行数值检查
-            conv_contrib = tf.reduce_sum(total_conversion_grads[conversion_key] * predictions[conversion_key])
-            visit_contrib = tf.reduce_sum(total_visit_grads[visit_key] * predictions[visit_key])
+            conv_contrib = tf.reduce_sum(total_paid_grads[paid_key] * predictions[paid_key])
+            cost_contrib = tf.reduce_sum(total_cost_grads[cost_key] * predictions[cost_key])
             
             conv_contrib = tf.where(tf.math.is_finite(conv_contrib), conv_contrib, 0.0)
-            visit_contrib = tf.where(tf.math.is_finite(visit_contrib), visit_contrib, 0.0)
+            cost_contrib = tf.where(tf.math.is_finite(cost_contrib), cost_contrib, 0.0)
             
-            ifdl_loss += conv_contrib + visit_contrib
+            ifdl_loss += conv_contrib + cost_contrib
 
         # 【修复7】：对最终损失进行范围限制
         ifdl_loss = tf.clip_by_value(ifdl_loss, -1e6, 1e6)
@@ -594,16 +594,16 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             # 2. GradNorm 的损失权重
             model_variables = [v for v in self.trainable_variables if 'loss_weights' not in v.name]
 
-            conversion_loss, visit_loss = self.compute_local_losses(predictions, labels)
+            paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
             decision_loss = self.decision_policy_learning_loss(predictions, labels)
             
             # --- 进阶监控 3 (续): 检查最终loss ---
-            conversion_loss = tf.debugging.check_numerics(conversion_loss, "NaN/Inf in conversion_loss")
-            visit_loss = tf.debugging.check_numerics(visit_loss, "NaN/Inf in visit_loss")
+            paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in paid_loss")
+            cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in cost_loss")
             decision_loss = tf.debugging.check_numerics(decision_loss, "NaN/Inf in decision_loss")
             
             # 2. 计算用于更新【模型参数】的损失
-            weighted_task_loss = 0.5 * conversion_loss + 0.5 * visit_loss
+            weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
             # 对应您代码中的 total_loss
             model_update_loss = self.alpha * weighted_task_loss * len(self.targets) - decision_loss
         
@@ -644,13 +644,13 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         # --- 梯度分析结束 ---
         
         # 思路1: 监控前向传播
-        self._add_summaries("labels/conversion", labels['conversion'], step=step)
-        self._add_summaries("labels/visit", labels['visit'], step=step)
+        self._add_summaries("labels/paid", labels['paid'], step=step)
+        self._add_summaries("labels/cost", labels['cost'], step=step)
         self._add_summaries("activations/shared_output",  shared_output, step=step)
 
         # 监控损失分量
-        self._add_summaries("losses/1_conversion_loss", conversion_loss, step=step)
-        self._add_summaries("losses/2_visit_loss", visit_loss, step=step)
+        self._add_summaries("losses/1_paid_loss", paid_loss, step=step)
+        self._add_summaries("losses/2_cost_loss", cost_loss, step=step)
         self._add_summaries("losses/3_weighted_task_loss", weighted_task_loss, step=step)
         self._add_summaries("losses/4_decision_loss", decision_loss, step=step)
         self._add_summaries("losses/5_model_update_loss", model_update_loss, step=step)
@@ -698,7 +698,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         return {
             "total_loss": model_update_loss, 
             "weighted_task_loss": weighted_task_loss, "decision_loss": decision_loss,
-            "conversion_loss": conversion_loss, "visit_loss": visit_loss,
+            "paid_loss": paid_loss, "cost_loss": cost_loss,
         }
 
     def test_step(self, data):
@@ -709,14 +709,14 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         for name, pred in predictions.items():
             predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in validation prediction: {name}")
 
-        conversion_loss, visit_loss = self.compute_local_losses(predictions, labels)
+        paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
         decision_loss = self.decision_policy_learning_loss(predictions, labels)
         
-        conversion_loss = tf.debugging.check_numerics(conversion_loss, "NaN/Inf in val_conversion_loss")
-        visit_loss = tf.debugging.check_numerics(visit_loss, "NaN/Inf in val_visit_loss")
+        paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in val_paid_loss")
+        cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in val_cost_loss")
         decision_loss = tf.debugging.check_numerics(decision_loss, "NaN/Inf in val_decision_loss")
 
-        weighted_task_loss = 0.5 * conversion_loss + 0.5 * visit_loss
+        weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
         model_update_loss =  self.alpha * weighted_task_loss * len(self.targets) - decision_loss
 
         # 移除返回字典键中的 "val_" 前缀，Keras 会自动添加
@@ -724,6 +724,6 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             "total_loss": model_update_loss,
             "weighted_task_loss": weighted_task_loss, 
             "decision_loss": decision_loss,
-            "conversion_loss": conversion_loss, 
-            "visit_loss": visit_loss,
+            "paid_loss": paid_loss, 
+            "cost_loss": cost_loss,
         }

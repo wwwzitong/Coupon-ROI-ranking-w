@@ -33,15 +33,91 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加�
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
 
+# --- Step: 提取 drop_list 和 label_name_list ---
+label_name_list = ['treatment','paid','cost']
+drop_list = ['paid','cost']
+# --- Step: 将 dataset 转换为 (features, labels) 格式 ---
+def _to_features_labels(parsed_example):
+    # 提取 features（从 feature_name_list 中）
+    features = {name: parsed_example[name] for name in parsed_example if name not in drop_list}
+    # 构建 labels 字典，特别处理 _treatment_index 的反转
+    labels = {}
+    for name in label_name_list:
+        value = parsed_example[name]
+        labels[name] = value
+
+    return features, labels  # 返回 (features, labels) 其中 labels 是 dict
+
+# In[ ]:
+
+# 去掉了steps_per_epoch = 300, 
+# ==================== 预计算全局统计量 ====================
+
+# ==================== Step 1: 预计算全局统计量（均值/方差） ====================
+def _count_csv_rows(csv_path: str) -> int:
+    # 统计数据行数（去掉 header）
+    n = 0
+    with tf.io.gfile.GFile(csv_path, 'r') as f:
+        for i, _ in enumerate(f):
+            pass
+        n = max(i, 0)  # i 是最后一行索引；减去 header 后约等于 i
+    return n
+
+def _welford_merge(count_a, mean_a, M2_a, count_b, mean_b, M2_b):
+    delta = mean_b - mean_a
+    count = count_a + count_b
+    mean = mean_a + delta * (count_b / tf.maximum(count, 1.0))
+    M2 = M2_a + M2_b + tf.square(delta) * (count_a * count_b / tf.maximum(count, 1.0))
+    return count, mean, M2
+
+def compute_global_dense_stats(ds, dense_names, clip_min=0.0):
+    d = len(dense_names)
+    count = tf.constant(0.0, dtype=tf.float64)
+
+    mean_raw = tf.zeros([d], dtype=tf.float64)
+    M2_raw = tf.zeros([d], dtype=tf.float64)
+
+    mean_log = tf.zeros([d], dtype=tf.float64)
+    M2_log = tf.zeros([d], dtype=tf.float64)
+
+    for features, _ in ds:
+        x = tf.stack([tf.cast(features[name], tf.float64) for name in dense_names], axis=1)  # [B, d]
+        x = tf.maximum(x, tf.cast(clip_min, tf.float64))
+
+        # raw
+        b_count = tf.cast(tf.shape(x)[0], tf.float64)
+        b_mean = tf.reduce_mean(x, axis=0)
+        b_M2 = tf.reduce_sum(tf.square(x - b_mean), axis=0)
+        count, mean_raw, M2_raw = _welford_merge(count, mean_raw, M2_raw, b_count, b_mean, b_M2)
+
+        # log1p(raw)
+        xl = tf.math.log1p(x)
+        b_mean_l = tf.reduce_mean(xl, axis=0)
+        b_M2_l = tf.reduce_sum(tf.square(xl - b_mean_l), axis=0)
+        _, mean_log, M2_log = _welford_merge(count - b_count, mean_log, M2_log, b_count, b_mean_l, b_M2_l)
+
+    denom = tf.maximum(count - 1.0, 1.0)
+    std_raw = tf.sqrt(tf.maximum(M2_raw / denom, 0.0))
+    std_log = tf.sqrt(tf.maximum(M2_log / denom, 0.0))
+
+    # 防止 std 为 0
+    std_raw = tf.where(std_raw > 0.0, std_raw, tf.ones_like(std_raw))
+    std_log = tf.where(std_log > 0.0, std_log, tf.ones_like(std_log))
+
+    return {
+        "raw":   {"mean": mean_raw.numpy().tolist(), "std": std_raw.numpy().tolist()},
+        "log1p": {"mean": mean_log.numpy().tolist(), "std": std_log.numpy().tolist()},
+    }
+
 # In[7]:
 
 
 # ==================== 建议添加的回调 ====================
 class EpochMetricsCallback(tf.keras.callbacks.Callback):
-    def __init__(self, log_dir):
-        super(EpochMetricsCallback, self).__init__()
-        # You can now use the log_dir, for example, to create a summary writer
-        self.writer = tf.summary.create_file_writer(os.path.join(log_dir, "custom_epoch_metrics"))
+    def __init__(self, log_dir, **kwargs):
+        super().__init__(**kwargs)
+        self.log_dir = log_dir
+        self.writer = tf.summary.create_file_writer(log_dir)
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
@@ -130,6 +206,37 @@ os.makedirs(log_dir, exist_ok=True)
 print("[Reset] 已清空并重建输出目录，将从随机初始化开始训练（不恢复任何 checkpoint）。")
 
 
+# In[11]:
+
+
+# 数据
+dataset = CSVData()
+train_samples = dataset.prepare_dataset(config['train_data'], phase='train', batch_size=global_batch_size, shuffle=True)
+# --- 应用 map 转换 ---
+train_samples = train_samples.map(
+    _to_features_labels,
+    num_parallel_calls=4  # ✅ 安全值，不要用 AUTOTUNE
+).prefetch(1)  # ✅ 避免缓冲区过大
+
+
+val_samples = dataset.prepare_dataset(config['val_data'], phase='test', batch_size=global_batch_size, shuffle=False)
+# --- 应用 map 转换 ---
+val_samples = val_samples.map(
+    _to_features_labels,
+    num_parallel_calls=4  # ✅ 安全值，不要用 AUTOTUNE
+).prefetch(1)  # ✅ 避免缓冲区过大
+
+# 只走一遍训练集（防止 prepare_dataset 内部 repeat 导致无限）
+num_rows = _count_csv_rows(config['train_data'])
+num_batches = int(math.ceil(num_rows / float(global_batch_size)))
+
+train_for_stats = dataset.prepare_dataset(
+    config['train_data'], phase='train', batch_size=global_batch_size, shuffle=False
+).map(_to_features_labels, num_parallel_calls=4).take(num_batches).prefetch(1)
+
+dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, clip_min=0.0)
+
+
 # 添加自定义回调
 epoch_metrics_callback = EpochMetricsCallback(log_dir=os.path.join(config['model_path'], 'logs'))
 callbacks = [
@@ -150,112 +257,6 @@ callbacks = [
     ),
     epoch_metrics_callback,
 ]
-
-
-# In[11]:
-
-
-# 数据
-dataset = CSVData()
-train_samples = dataset.prepare_dataset(config['train_data'], phase='train', batch_size=global_batch_size, shuffle=True)
-# --- Step: 提取 drop_list 和 label_name_list ---
-label_name_list = ['treatment','paid','cost']
-drop_list = ['paid','cost']
-# --- Step: 将 dataset 转换为 (features, labels) 格式 ---
-def _to_features_labels(parsed_example):
-    # 提取 features（从 feature_name_list 中）
-    features = {name: parsed_example[name] for name in parsed_example if name not in drop_list}
-    # 构建 labels 字典，特别处理 _treatment_index 的反转
-    labels = {}
-    for name in label_name_list:
-        value = parsed_example[name]
-        labels[name] = value
-
-    return features, labels  # 返回 (features, labels) 其中 labels 是 dict
-# --- 应用 map 转换 ---
-train_samples = train_samples.map(
-    _to_features_labels,
-    num_parallel_calls=4  # ✅ 安全值，不要用 AUTOTUNE
-).prefetch(1)  # ✅ 避免缓冲区过大
-
-
-val_samples = dataset.prepare_dataset(config['val_data'], phase='test', batch_size=global_batch_size, shuffle=False)
-# --- 应用 map 转换 ---
-val_samples = val_samples.map(
-    _to_features_labels,
-    num_parallel_calls=4  # ✅ 安全值，不要用 AUTOTUNE
-).prefetch(1)  # ✅ 避免缓冲区过大
-
-# In[ ]:
-
-# 去掉了steps_per_epoch = 300, 
-# ==================== 预计算全局统计量 ====================
-
-# ==================== Step 1: 预计算全局统计量（均值/方差） ====================
-def _count_csv_rows(csv_path: str) -> int:
-    # 统计数据行数（去掉 header）
-    n = 0
-    with tf.io.gfile.GFile(csv_path, 'r') as f:
-        for i, _ in enumerate(f):
-            pass
-        n = max(i, 0)  # i 是最后一行索引；减去 header 后约等于 i
-    return n
-
-def _welford_merge(count_a, mean_a, M2_a, count_b, mean_b, M2_b):
-    delta = mean_b - mean_a
-    count = count_a + count_b
-    mean = mean_a + delta * (count_b / tf.maximum(count, 1.0))
-    M2 = M2_a + M2_b + tf.square(delta) * (count_a * count_b / tf.maximum(count, 1.0))
-    return count, mean, M2
-
-def compute_global_dense_stats(ds, dense_names, clip_min=0.0):
-    d = len(dense_names)
-    count = tf.constant(0.0, dtype=tf.float64)
-
-    mean_raw = tf.zeros([d], dtype=tf.float64)
-    M2_raw = tf.zeros([d], dtype=tf.float64)
-
-    mean_log = tf.zeros([d], dtype=tf.float64)
-    M2_log = tf.zeros([d], dtype=tf.float64)
-
-    for features, _ in ds:
-        x = tf.stack([tf.cast(features[name], tf.float64) for name in dense_names], axis=1)  # [B, d]
-        x = tf.maximum(x, tf.cast(clip_min, tf.float64))
-
-        # raw
-        b_count = tf.cast(tf.shape(x)[0], tf.float64)
-        b_mean = tf.reduce_mean(x, axis=0)
-        b_M2 = tf.reduce_sum(tf.square(x - b_mean), axis=0)
-        count, mean_raw, M2_raw = _welford_merge(count, mean_raw, M2_raw, b_count, b_mean, b_M2)
-
-        # log1p(raw)
-        xl = tf.math.log1p(x)
-        b_mean_l = tf.reduce_mean(xl, axis=0)
-        b_M2_l = tf.reduce_sum(tf.square(xl - b_mean_l), axis=0)
-        _, mean_log, M2_log = _welford_merge(count - b_count, mean_log, M2_log, b_count, b_mean_l, b_M2_l)
-
-    denom = tf.maximum(count - 1.0, 1.0)
-    std_raw = tf.sqrt(tf.maximum(M2_raw / denom, 0.0))
-    std_log = tf.sqrt(tf.maximum(M2_log / denom, 0.0))
-
-    # 防止 std 为 0
-    std_raw = tf.where(std_raw > 0.0, std_raw, tf.ones_like(std_raw))
-    std_log = tf.where(std_log > 0.0, std_log, tf.ones_like(std_log))
-
-    return {
-        "raw":   {"mean": mean_raw.numpy().tolist(), "std": std_raw.numpy().tolist()},
-        "log1p": {"mean": mean_log.numpy().tolist(), "std": std_log.numpy().tolist()},
-    }
-
-# 只走一遍训练集（防止 prepare_dataset 内部 repeat 导致无限）
-num_rows = _count_csv_rows(config['train_data'])
-num_batches = int(math.ceil(num_rows / float(global_batch_size)))
-
-train_for_stats = dataset.prepare_dataset(
-    config['train_data'], phase='train', batch_size=global_batch_size, shuffle=False
-).map(_to_features_labels, num_parallel_calls=4).take(num_batches).prefetch(1)
-
-dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, clip_min=0.0)
 
 
 # import tensorflow_addons as tfa

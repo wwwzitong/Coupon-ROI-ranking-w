@@ -16,7 +16,13 @@ import json
 import matplotlib.pyplot as plt
 import datetime
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from data_utils import *                       #!!!!!!TODO:需要将model脚本转为py文件，正确import
+import os
+import sys
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
+from data_utils import *                     #!!!!!!TODO:需要将model脚本转为py文件，正确import
 # from ecom_dfcl import EcomDFCL_v3
 # from ecom_drm import EcomDRM19
 # from ecom_dfl import EcomDFL
@@ -32,7 +38,7 @@ DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9'
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
     # 'eval_data': 'data/criteo_test.csv',
-    'eval_data': 'data/criteo_train.csv',
+    'eval_data': '../../data/criteo_train.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79
 }
@@ -40,23 +46,23 @@ config = {
 model_paths_DFCL = [
 
 
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=5e3_global_log1p",
+
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=100_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=100_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=100_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=100_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=100_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=100_global_log1p",
+
 ]
 
 model_paths_else = [
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=5e3",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=5e3",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=5e3",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=5e3",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=5e3",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=5e3",
-
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=100",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=100",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=100",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=100",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=100",
-    # "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=100",
-
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=5e3_global_log1p",
 ]
 
 
@@ -254,14 +260,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
     norm_x_coords = [0] +(df_binned['delta_cost'] / final_delta_cost).tolist() if final_delta_cost > 0 else [0.0] * len(df_binned)
     norm_y_coords = [0] +(df_binned['delta_gain'] / final_delta_gain).tolist() if final_delta_gain > 0 else [0.0] * len(df_binned)
 
-    # # 先生成核心点（长度= len(df_binned)）
-    # x_core = (df_binned['delta_cost'] / final_delta_cost).tolist() if final_delta_cost != 0 else [0.0] * len(df_binned)
-    # y_core = (df_binned['delta_gain'] / final_delta_gain).tolist() if final_delta_gain != 0 else [0.0] * len(df_binned)
-    # # 再统一加起点0（长度= len(df_binned)+1）
-    # norm_x_coords = [0.0] + x_core
-    # norm_y_coords = [0.0] + y_core
-
-    # 1. 读取现有数据 看清楚路径
+     # 1. 读取现有数据 看清楚路径
     try:
         with open(aucc_v2_save_path, 'r', encoding='utf-8') as f:
             all_results = json.load(f)
