@@ -6,8 +6,16 @@ import random
 # from tensorflow import keras
 import numpy as np
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+from ecom_slearner import SLearner
+
+import os
+import sys
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
 from data_utils import *
-from ecom_dfcl_copy_nosparse import EcomDFCL_v3
+
 # from ecom_dfcl_copy_0926 import EcomDFCL_re
 # from ecom_drm import EcomDRM19
 # from ecom_dfl import EcomDFL
@@ -16,7 +24,6 @@ from ecom_dfcl_copy_nosparse import EcomDFCL_v3
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
-import sys
 import io
 
 # ==================== 设置随机种子确保可复现性 ====================
@@ -77,17 +84,15 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
-    'model_class_name': 'EcomDFCL_v3',
-    'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
+    'model_class_name': 'SLearner',
+    'model_path': './model/SLearner_2pos_lr3_alpha=0.1',
     'last_model_path': '',
-    'loss_function': '2pll',  # 3erl, 
-    'train_data': './data/criteo_train.csv', 
-    'val_data': './data/criteo_val.csv',
+    'train_data': '../data/criteo_train.csv', 
+    'val_data': '../data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
     'learning_rate': 0.001,
     'summary_steps': 1000,
-    'alpha': 0.1,
     'clipnorm': 5e3,
     'first_decay_steps': 1000,
 }
@@ -97,9 +102,6 @@ parser.add_argument('--model_class_name', type=str, default=config['model_class_
                     help='The name of the model class to train.')
 parser.add_argument('--model_path', type=str, default=config['model_path'],
                     help='The path to save the model and logs.')
-parser.add_argument('--loss_function', type=str, default=config['loss_function'],
-                    help='The expression of decision loss function.')
-parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 
@@ -109,8 +111,6 @@ args = parser.parse_args()
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
-config['loss_function'] = args.loss_function
-config['alpha'] = args.alpha
 config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
 
@@ -119,8 +119,6 @@ config['learning_rate'] = args.lr
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
-print(f"Decision Loss Function: {config['loss_function']}")
-print(f"Alpha: {config['alpha']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
 print("--------------------")
@@ -138,7 +136,7 @@ global_batch_size = config['batch_size'] * strategy.num_replicas_in_sync
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(alpha = config['alpha'])
+    model = model_class()
     # optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
     #optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
     # 学习率调度器：带 Warmup 的余弦退火

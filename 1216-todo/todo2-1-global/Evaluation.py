@@ -9,64 +9,127 @@
 
 from __future__ import print_function, absolute_import, division
 import os
+import sys
 import tensorflow as tf
 import numpy as np
+import random
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
 import datetime
-#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-import os
-import sys
+from pathlib import Path
+
+# from fsfc_mine_mx2 import * #自行生成fsfc文件（脚本放在data_flow中）
+# from data_utils_mx2 import *
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
+from data_utils import *
 
-from data_utils import *                     #!!!!!!TODO:需要将model脚本转为py文件，正确import
-# from ecom_dfcl import EcomDFCL_v3
-# from ecom_drm import EcomDRM19
-# from ecom_dfl import EcomDFL
+# 将输出保存到文件
+import io
+import threading
+from contextlib import contextmanager
+
+class TeeStream(io.TextIOBase):
+    """把写入内容同时写到多个 text stream（例如：原终端 + 文件）"""
+    def __init__(self, *streams):
+        self.streams = streams
+        self._lock = threading.Lock()
+
+    def write(self, s):
+        if not s:
+            return 0
+        with self._lock:
+            for st in self.streams:
+                st.write(s)
+            return len(s)
+
+    def flush(self):
+        with self._lock:
+            for st in self.streams:
+                st.flush()
+
+    @property
+    def encoding(self):
+        return getattr(self.streams[0], "encoding", "utf-8")
+
+    def isatty(self):
+        # 保留 isatty 行为，避免某些库判断错
+        return any(getattr(st, "isatty", lambda: False)() for st in self.streams)
+
+
+@contextmanager
+def tee_output(filepath, mode="a", encoding="utf-8"):
+    """
+    在 with 块内，将 stdout/stderr 同时输出到终端和文件。
+    mode: "a" 追加, "w" 覆盖
+    """
+    old_out, old_err = sys.stdout, sys.stderr
+    # buffering=1: 行缓冲，尽量边跑边落盘
+    f = open(filepath, mode, encoding=encoding, buffering=1)
+
+    try:
+        sys.stdout = TeeStream(old_out, f)
+        sys.stderr = TeeStream(old_err, f)
+        yield
+    finally:
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        finally:
+            sys.stdout, sys.stderr = old_out, old_err
+            f.close()
+
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
-
-# ### 上述代替import
-
-# In[2]:
 
 
-# --- 1. 配置字典（替代命令行参数） ---
 config = {
-    # 'eval_data': 'data/criteo_test.csv',
     'eval_data': '../../data/criteo_train.csv',
     'batch_size': 1024*16,
-    'max_batches_for_eval':79
+    'max_batches_for_eval':79,
+    'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
+    'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
 }
-# 步骤 3: 循环评估每个已保存的模型
-model_paths_DFCL = [
+# # 训练集上试试
+# config = {
+#     'eval_data': 'data/train_set/part-*',
+#     'batch_size': 1024*16,
+#     'max_batches_for_eval':50,
+#     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
+#     'auuc_path': "result/auuc.json" #保存好坐标点，以便后续画图
+# }
 
 
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=5e3_global_log1p",
-
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=100_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=100_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.5_clip=100_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.0_clip=100_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=1.5_clip=100_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=2.0_clip=100_global_log1p",
-
-]
-
-model_paths_else = [
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1_clip=5e3_global_log1p",
-    "./model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.3_clip=5e3_global_log1p",
-]
-
-
-# In[3]:
+# In[4]:
 
 
 # --- 2. 加载测试集 ---
@@ -77,6 +140,8 @@ eval_samples = dataset.prepare_dataset(
     batch_size=config['batch_size'], # 一次性加载所有数据进行评估 =None
     shuffle=False
 )
+
+# --- Step: 提取 drop_list 和 label_name_list ---
 label_name_list = ['treatment','paid','cost']
 drop_list = ['paid','cost']
 
@@ -84,17 +149,10 @@ drop_list = ['paid','cost']
 def _to_features_labels(parsed_example):
     # 提取 features（从 feature_name_list 中）
     features = {name: parsed_example[name] for name in parsed_example if name not in drop_list}
-    # 构建 labels 字典，特别处理 treatment 的反转
     labels = {}
     for name in label_name_list:
         value = parsed_example[name]
-        # if name == 'treatment':
-        #     # 反转：0 -> 1, 1 -> 0
-        #     reversed_value = tf.cast(1 - value, tf.int32)
-        #     labels[name] = reversed_value
-        # else:
         labels[name] = value
-
     return features, labels  # 返回 (features, labels) 其中 labels 是 dict
 # --- 应用 map 转换 ---
 eval_samples = eval_samples.map(
@@ -103,28 +161,36 @@ eval_samples = eval_samples.map(
 ).prefetch(1)
 
 
-# In[5]:
+# In[6]:
+
+
+# 步骤 3: 循环评估每个已保存的模型
+model_paths_DFCL = [
+    "./model/EcomDFCL_v3_3erl_2pos_lr3_alpha=0.1_clip=5e3_global_raw",
+]
+model_paths_else = [
+
+]
+
+
+# In[7]:
 
 
 treatment_order = [1, 0] #处理组为15off，另一组是空白组
 ratios = [i / 100.0 for i in range(5, 105, 5)]
+aucc_save_path = config['aucc_save_path']
+auuc_save_path = config['auuc_save_path']
+
 
 # 生成当前时间字符串
 current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-plot_save_dir = f"result/plots"
-if not os.path.exists(plot_save_dir):
-    os.makedirs(plot_save_dir)
-    print(f"已创建图片保存文件夹: {plot_save_dir}")
-
-# 修改保存路径，加入时间戳
-aucc_save_path = "result/2-result_aucc.json" #保存好坐标点，以便后续画图
-auuc_path = "result/2-auuc.json" #保存好坐标点，以便后续画图
-aucc_v2_save_path = "result/2-result_aucc_v2.json"
 
 # ## AUCC
 
-# In[6]:
+# In[8]:
+
+
 
 def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', bins=100):
     """
@@ -197,8 +263,13 @@ def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col
     print("\n保存成功！后续可加载此文件直接绘制 AUCC 曲线，无需重新计算。")
     return aucc_score
 
-#公司另外一个版本的AUCC
-def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100):
+
+# ## AUCC公司另外一个版本
+
+# In[9]:
+
+
+def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100):
     '''
     公司另外一个版本的AUCC,分bins去作图，以bins中的第一个user作为落点依据。图会更加的平滑。无其他过滤逻辑。
     '''
@@ -262,7 +333,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
 
      # 1. 读取现有数据 看清楚路径
     try:
-        with open(aucc_v2_save_path, 'r', encoding='utf-8') as f:
+        with open("result/result_aucc_v2.json", 'r', encoding='utf-8') as f:
             all_results = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         all_results = {}
@@ -274,24 +345,136 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
         'y_coords': norm_y_coords
     }
     
-    with open(aucc_v2_save_path, 'w', encoding='utf-8') as f:
+    with open("result/result_aucc_v2.json", 'w', encoding='utf-8') as f:
         json.dump(all_results, f, indent=4)
 
     return aucc_score
 
 
-# 修改定义，增加 model_path 和 save_dir 参数
-def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model', save_dir=None):
+# In[10]:
+
+
+def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv"):
+    '''
+    公司另外一个版本的AUCC,分bins去作图，以bins中的第一个user作为落点依据。图会更加的平滑。无其他过滤逻辑。
+    '''
+    # --- 第1步: 筛选实验组和控制组数据 ---
+    df_filtered = df[(df[treatment_col] == control_val) | (df[treatment_col] == treatment_val)].copy()
+
+    # --- 第2步: 计算排序指标 (pred_roi) 并排序 PS：这里把公司的给改了，当前的排序指标只对应ratio=1的情况，我还是倾向于累加模拟积分 ---
+    df_filtered['pred_roi'] = df_filtered[uplift_col]
+    
+    df_sorted = df_filtered.sort_values('pred_roi', ascending=False).reset_index(drop=True)
+    # 将索引从1开始，方便后续计算累积用户数
+    df_sorted.index = df_sorted.index + 1
+
+    # --- 第3步: 计算累积uplift (delta_gain, delta_cost) ---
+    is_treatment = (df_sorted[treatment_col] == treatment_val)
+    
+    cumsum_tr = is_treatment.cumsum()
+    cumsum_ct = df_sorted.index.values - cumsum_tr
+    
+    # 为避免除以0，将累积数为0的替换为NaN，后续计算平均值时会自动忽略
+    cumsum_tr_safe = cumsum_tr.replace(0, np.nan)
+    cumsum_ct_safe = cumsum_ct.replace(0, np.nan)
+
+    cumsum_gain_tr = (df_sorted[reward_col] * is_treatment).cumsum()
+    cumsum_gain_ct = (df_sorted[reward_col] * ~is_treatment).cumsum()
+    cumsum_cost_tr = (df_sorted[cost_col] * is_treatment).cumsum()
+    cumsum_cost_ct = (df_sorted[cost_col] * ~is_treatment).cumsum()
+
+    # 计算累积uplift
+    df_sorted['delta_gain'] = (cumsum_gain_tr / cumsum_tr_safe - cumsum_gain_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+    df_sorted['delta_cost'] = (cumsum_cost_tr / cumsum_tr_safe - cumsum_cost_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+
+    # --- 第4步: 按 delta_cost 进行分桶 ---
+    # 完全遵循 metric.py 中的分桶逻辑
+    df_sorted['cost_bin'] = pd.cut(df_sorted['delta_cost'], bins=n_bins, labels=False, include_lowest=True)
+    
+    # 取每个桶的第一个点作为曲线的关键点
+    df_binned = df_sorted.groupby('cost_bin').first()
+    
+    # 确保曲线的终点是全体用户的最终uplift值
+    last_row = df_sorted.iloc[[-1]]
+    df_binned = pd.concat([df_binned, last_row]).reset_index() # 使用reset_index保留原始的index
+    df_binned = df_binned.drop_duplicates(subset=['delta_cost'], keep='first').sort_values('delta_cost')
+
+    # --- 新增：检测并保存 AUCC 曲线下降区间的样本 ---
+    if output_dip_samples_path and len(df_binned) > 1:
+        all_dip_samples = []
+        df_binned_reset = df_binned.reset_index(drop=True)
+        for i in range(len(df_binned_reset) - 1):
+            current_gain = df_binned_reset.loc[i, 'delta_gain']
+            next_gain = df_binned_reset.loc[i+1, 'delta_gain']
+
+            if next_gain < current_gain:
+                # 发现一个下降区间
+                start_original_idx = df_binned_reset.loc[i, 'index']
+                end_original_idx = df_binned_reset.loc[i+1, 'index']
+                
+                print(f"检测到 AUCC 曲线下降区间: 从第 {i} 个点到第 {i+1} 个点。")
+                print(f"  - Delta Gain: {current_gain:.2f} -> {next_gain:.2f}")
+                print(f"  - 对应原始排序后样本范围 (索引从1开始): {start_original_idx} -> {end_original_idx}")
+
+                # 提取这部分样本 (df_sorted的索引是从1开始的)
+                dip_samples = df_sorted.loc[start_original_idx:end_original_idx].copy()
+                dip_samples['dip_segment'] = f'dip_{i}_to_{i+1}'
+                all_dip_samples.append(dip_samples)
+        
+        if all_dip_samples:
+            combined_dip_samples = pd.concat(all_dip_samples)
+            combined_dip_samples.to_csv(output_dip_samples_path, index=False, encoding='utf-8-sig')
+            print(f"\n已将所有下降区间的样本数据保存至: {output_dip_samples_path}")
+
+    # --- 第5步: 计算AUCC分数 ---
+    final_delta_gain = df_binned['delta_gain'].iloc[-1]
+    
+    if final_delta_gain == 0 or len(df_binned) <= 1:
+        aucc_score = 0.5  # 如果没有增益或数据不足，模型效果等同于随机
+    else:
+        # 使用 metric.py 中的归一化面积公式
+        # (曲线下面积) / (最大增益) / (桶数)
+        aucc_score = (df_binned['delta_gain'].sum() - final_delta_gain / 2) / final_delta_gain / n_bins
+
+    # --- 第6步: 准备并保存绘图数据到JSON文件 ---
+    final_delta_cost = df_binned['delta_cost'].iloc[-1]
+
+    # 归一化坐标轴到[0, 1]区间，用于绘图
+    norm_x_coords = [0] +(df_binned['delta_cost'] / final_delta_cost).tolist() if final_delta_cost > 0 else [0.0] * len(df_binned)
+    norm_y_coords = [0] +(df_binned['delta_gain'] / final_delta_gain).tolist() if final_delta_gain > 0 else [0.0] * len(df_binned)
+
+     # 1. 读取现有数据 看清楚路径
+    try:
+        with open("result/result_aucc_v2.json", 'r', encoding='utf-8') as f:
+            all_results = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_results = {}
+
+    # 2. 更新数据
+    all_results[model_path] = {
+        'aucc_score': aucc_score,
+        'x_coords': norm_x_coords,
+        'y_coords': norm_y_coords
+    }
+    
+    with open("result/result_aucc_v2.json", 'w', encoding='utf-8') as f:
+        json.dump(all_results, f, indent=4)
+
+    return aucc_score
+
+
+# In[11]:
+
+
+def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model'):
     """
-    计算AUCC并保存图像
+    计算AUCC
     :param pdf: 计算aucc的pandas df
     :param treatment_col: treatment列名
     :param gain_col: 收益列名
     :param cost_col: 成本列名
     :param pred_roi_col: roi排序列名
     :param treatment_index: 对哪个treatment计算
-    :param model_path: 模型路径，用于生成文件名
-    :param save_dir: 图片保存目录
     :return: aucc的值
     """
     aucc_dict = {}
@@ -317,27 +500,19 @@ def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cos
     # 归一化 delta_gain 和 delta_cost 到 [0, 1] 区间，并处理总增量为0的情况
     df['norm_delta_gain'] = df['delta_gain'] / total_delta_gain if total_delta_gain != 0 else 0
     df['norm_delta_cost'] = df['delta_cost'] / total_delta_cost if total_delta_cost != 0 else 0
-    
     # 使用归一化后的值进行绘图
-    plt.figure() # 显式创建新图形，避免重叠
     plt.plot(df['norm_delta_cost'], df['norm_delta_gain'], label='model_pred')
     # 在归一化空间中，随机曲线是一条从(0,0)到(1,1)的对角线
     plt.plot(df['norm_delta_cost'], df['norm_delta_cost'], label='random', linestyle='--')
     plt.legend()
     plt.xlabel("Normalized Cumulative Cost")
     plt.ylabel("Normalized Cumulative Gain")
-    plt.title(f"Normalized AUCC Curve ({pred_roi_col})") # 标题增加区分度
+    plt.title(f"Normalized AUCC Curve ({pred_roi_col})")
 
+    # plt.show()
     # --- 修改开始：保存图像逻辑 ---
-    sanitized_model_name = model_path.replace('/', '_').replace('\\', '_').replace('.', '')
-    filename = f"aucc_curve_{pred_roi_col}_treat{treatment_index}_{sanitized_model_name}.png"
-    
-    if save_dir:
-        plot_save_path = os.path.join(save_dir, filename)
-    else:
-        # 默认保存路径，带时间戳防止覆盖
-        current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_save_path = f"result/{filename.replace('.png', f'_{current_ts}.png')}"
+    current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_save_path = f"{model_path}/result/aucc_{pred_roi_col}_treat{treatment_index}_{current_ts}.png"
 
     plt.savefig(plot_save_path)
     plt.close() # 关闭图像，释放内存
@@ -353,9 +528,12 @@ def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cos
     print(aucc_dict)
     return aucc_dict
 
+
 # ## AUUC
 
-# In[7]:
+# In[12]:
+
+
 def calculate_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift'):
     """
     计算归一化的累计Uplift曲线下面积 (Normalized Cumulative AUUC)。
@@ -426,9 +604,112 @@ def calculate_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col=
     return auuc_score, baseline_auuc
 
 
+# In[13]:
+
+
+def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift'):
+    """
+    计算归一化的累计Uplift曲线下面积 (Normalized Cumulative AUUC)。
+    """
+    # Step 1: 按模型预测的 uplift 分数降序排列
+    df_sorted = df.sort_values(uplift_col, ascending=False).reset_index(drop=True)
+    n_total = len(df_sorted)
+
+    # Step 2: 预先计算实验组和对照组的掩码及累计和，提高效率
+    treat_mask = (df_sorted[treatment_col] == 1)
+    ctrl_mask = (df_sorted[treatment_col] == 0)
+
+    # 计算累计用户数
+    n_treat_cumsum = treat_mask.cumsum()
+    n_ctrl_cumsum = ctrl_mask.cumsum()
+
+    # 计算累计收益
+    reward_treat_cumsum = (df_sorted[reward_col] * treat_mask).cumsum()
+    reward_ctrl_cumsum = (df_sorted[reward_col] * ctrl_mask).cumsum()
+
+    # 防止除零错误
+    n_treat_cumsum_safe = n_treat_cumsum.replace(0, 1e-9)
+    n_ctrl_cumsum_safe = n_ctrl_cumsum.replace(0, 1e-9)
+
+    # Step 3: 计算累计Uplift (Incremental Uplift)
+    # 这是与“平均Uplift”方法的核心区别
+    cumulative_uplift = (reward_treat_cumsum / n_treat_cumsum_safe - reward_ctrl_cumsum / n_ctrl_cumsum_safe) * (n_treat_cumsum + n_ctrl_cumsum)
+
+    # Step 4: 归一化坐标轴
+    population_fraction = np.arange(1, n_total + 1) / n_total
+    x_coords = [0] + population_fraction.tolist()
+    
+    # Y轴通过除以总Uplift进行归一化
+    total_uplift = cumulative_uplift.iloc[-1]
+    if total_uplift != 0:
+        y_coords_normalized = (cumulative_uplift / total_uplift).tolist()
+    else:
+        y_coords_normalized = [0] * n_total
+    y_coords = [0] + y_coords_normalized
+    
+    # Step 5: 计算AUUC (曲线下面积) 和基线AUUC
+    auuc_score = np.trapz(y=y_coords, x=x_coords)
+    # 在归一化坐标系下，随机基线是y=x的对角线，其面积固定为0.5
+    baseline_auuc = 0.5
+    
+    # Step 6: 计算Qini系数
+    qini_coefficient = 2 * (auuc_score - baseline_auuc)
+    
+    # Step 7: 创建结果字典
+    results = {
+        'auuc_score': float(auuc_score),
+        'baseline_auuc': float(baseline_auuc),
+        'qini_coefficient': float(qini_coefficient),
+    }
+    
+    # Step 8: 绘制图表
+    plt.figure(figsize=(12, 7))
+    
+    # 绘制AUUC曲线
+    plt.plot(x_coords, y_coords, 'b-', linewidth=2.5, label=f'Uplift Model (AUUC = {auuc_score:.4f})')
+    
+    # 绘制随机基线（对角线）
+    plt.plot([0, 1], [0, 1], 'r--', linewidth=1.5, alpha=0.7, label='Random Baseline (AUUC = 0.5)')
+    
+    # 绘制零线
+    plt.axhline(y=0, color='k', linestyle=':', linewidth=1, alpha=0.5)
+    
+    # 填充曲线下面积
+    plt.fill_between(x_coords, y_coords, 0, alpha=0.2, color='blue')
+    
+    # 设置图表属性
+    plt.xlabel('Population Fraction (Sorted by Uplift Score)', fontsize=12)
+    plt.ylabel('Normalized Cumulative Uplift', fontsize=12)
+    
+    title = f'{uplift_col} - AUUC Curve - {reward_col}'
+    plt.title(title, fontsize=14, fontweight='bold')
+    
+    # 添加AUUC和Qini系数信息
+    info_text = f'AUUC Score: {auuc_score:.4f}\nQini Coefficient: {qini_coefficient:.4f}\nTotal Uplift: {total_uplift:.2f}\nSample Size: {n_total}'
+    plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
+             fontsize=10, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    plt.grid(True, alpha=0.3)
+    plt.legend(loc='upper left')
+    plt.xlim(0, 1)
+    plt.ylim(min(y_coords) - 0.05, max(y_coords) + 0.05)
+    
+    plt.tight_layout()
+    # plt.show()
+    current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_save_path = f"{model_path}/result/auuc_{reward_col}_{uplift_col}_{current_ts}.png"
+    plt.savefig(plot_save_path)
+
+    plt.close()
+
+    print(results)
+
+
 # ## Uplift Bar Plot
 
-# In[8]:
+# In[14]:
+
 
 def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatment', uplift_col='uplift', bins=20, model_path='unknown_model'):
     """
@@ -519,20 +800,26 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
 
     # 5. 保存图像
     # 清理模型路径以创建有效的文件名
-    sanitized_model_name = model_path.replace('/', '_').replace('\\', '_').replace('.', '')
-    plot_save_path = f"result/uplift_bar_{target_col}_{sanitized_model_name}.png"
+    current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_save_path = f"{model_path}/result/uplift_bar_{target_col}_{current_ts}.png"
     plt.savefig(plot_save_path)
+
     plt.close()  # 关闭图形，释放内存
     
     print(f"Uplift Bar Plot 已保存至: {plot_save_path}")
 
-# In[11]:
+
+# In[16]:
 
 # --- 评估流程 (已完善) 倾向于每一个model单独计算完metric，进行数据保留后统一画图（因为模型输出接口不一致）---
 print("开始评估流程...")
 
 for model_path in model_paths_DFCL: 
     print(f"\n{'='*20} 正在评估模型: {model_path} {'='*20}")
+
+    result_dir = Path(f"./{model_path}/result")   # 或 r".\result"
+    result_dir.mkdir(parents=True, exist_ok=True)  # 不存在就创建，存在也不报错
+    print("result文件夹已创建...")
     
     # 2.1 加载模型并进行预测
     print("加载模型并进行预测...")
@@ -543,6 +830,8 @@ for model_path in model_paths_DFCL:
         
     # 初始化用于存储所有批次结果的列表
     all_uplifts = []
+    all_uplift_paid = []
+    all_uplift_cost = []
     all_rois = []
     all_treat_paid = []
     all_treat_cost = []
@@ -593,6 +882,10 @@ for model_path in model_paths_DFCL:
 
         # 收集当前批次的预测uplift和真实标签
         all_uplifts.append(integrated_uplift_per_sample)
+        # 新增uplift逻辑
+        all_uplift_paid.append(pred_paid_uplift)
+        all_uplift_cost.append(pred_cost_uplift)
+        # 新增结束
         all_rois.append(roi)
         all_treat_paid.append(pred_paid_treat)
         all_treat_cost.append(pred_cost_treat)
@@ -600,11 +893,14 @@ for model_path in model_paths_DFCL:
         all_ctrl_cost.append(pred_cost_ctrl)
         all_paid_labels.append(labels_batch['paid'].numpy())
         all_cost_labels.append(labels_batch['cost'].numpy())
+        # all_treatment_labels.append(labels_batch['_treatment_index'].numpy())
         all_treatment_labels.append(labels_batch['treatment'].numpy())
 
     print("所有批次预测完成，正在整合结果...")
     # 将所有批次的结果（list of arrays）拼接成一个大的Numpy数组
     final_uplifts = np.concatenate(all_uplifts)
+    final_uplift_paid = np.concatenate(all_uplift_paid) # new
+    final_uplift_cost = np.concatenate(all_uplift_cost) # new
     final_rois = np.concatenate(all_rois)
     final_treat_paid = np.concatenate(all_treat_paid)
     final_treat_cost = np.concatenate(all_treat_cost)
@@ -625,133 +921,142 @@ for model_path in model_paths_DFCL:
         'treat_paid': final_treat_paid,
         'treat_cost': final_treat_cost,
         'ctrl_paid': final_ctrl_paid,
-        'ctrl_cost': final_ctrl_cost
+        'ctrl_cost': final_ctrl_cost,
+        'uplift_paid': final_uplift_paid, # new
+        'uplift_cost': final_uplift_cost, # new
     })
     
+    with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
+        # 打印结果DataFrame的前几行以供查验
+        print("\n评估结果DataFrame示例:")
+        print(eval_df.head())
+        eval_df['treatment'] = eval_df['treatment'].astype(int)
+        
+        # 7. 计算 AUCC 并获取绘图数据
+        print("正在计算 AUCC 指标...")
+        aucc_score = strict_aucc_algorithm2(df=eval_df)
+        print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
+        aucc_score_2 = calculate_and_save_aucc(df=eval_df)
+        print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
 
-    # 打印结果DataFrame的前几行以供查验
-    print("\n评估结果DataFrame示例:")
-    print(eval_df.head())
-    eval_df['treatment'] = eval_df['treatment'].astype(int)
-    
-    # 7. 计算 AUCC 并获取绘图数据
-    print("正在计算 AUCC 指标...")
-    aucc_score = strict_aucc_algorithm2(df=eval_df)
-    print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
-    aucc_score_2 = calculate_and_save_aucc(df=eval_df)
-    print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
-
-    print("正在计算 AUUC 指标...")
-    auuc, baseline_auuc = calculate_auuc(df=eval_df)
-    print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, AUUC 分数为: {auuc:.6f}")
-    
-    # --- 新增：调用 Uplift Bar Plot 函数 ---
-    print("正在生成 PAID Uplift Bar Plot...")
-    calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', model_path=model_path)
-    
-    print("正在生成 Cost Uplift Bar Plot...")
-    calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', model_path=model_path)
-    
-    print("正在生成 AUCC Plot (Uplift)...")
-    get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path, save_dir=plot_save_dir)
-    
-    print("正在生成 AUCC Plot (ROI)...")
-    get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path, save_dir=plot_save_dir)
-
-
-    # 1127Addition：
-    # --- 新增评估逻辑 ---
-    from sklearn.metrics import roc_auc_score
-
-    print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
-    # 筛选出实验组数据用于评估
-    treatment_df = eval_df[eval_df['treatment'] == 1]
-
-    if treatment_df.empty:
-        print("实验组无数据，跳过额外评估。")
-    else:
-        # 1. 统计模型预估值平均值和真实值平均值对比
-        print("\n模型预估值与真实值均值对比 (实验组):")
-        avg_pred_paid = treatment_df['treat_paid'].mean()
-        avg_true_paid = treatment_df['paid'].mean()
-        print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
-
-        avg_pred_cost = treatment_df['treat_cost'].mean()
-        avg_true_cost = treatment_df['cost'].mean()
-        print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
-
-        # 2. 计算并展示 paid 和 cost 的 regAUC
-        print("\n计算 Regression AUC (regAUC, 在实验组上):")
-
-        def calculate_reg_auc(y_true, y_pred, label_name):
-            # 检查真实值是否都一样，无法计算AUC
-            if y_true.nunique() <= 1:
-                print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                return
-
-            # 将回归问题转化为二分类问题来计算AUC
-            binary_true = (y_true > y_true.median()).astype(int)
-            
-            # 检查二分后的标签是否只有一个类别
-            if len(np.unique(binary_true)) <= 1:
-                print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                return
-            
-            reg_auc = roc_auc_score(binary_true, y_pred)
-            print(f"  - {label_name} regAUC: {reg_auc:.4f}")
-
-        calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
-        calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
+        print("正在计算 AUUC 指标...")
+        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
+        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
+        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
+        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
+        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
+        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-roi AUUC 分数为: {auuc:.6f}")
+        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='roi')
+        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
+        
+        # --- 新增：调用 Uplift Bar Plot 函数 ---
+        print("正在生成 Paid Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        
+        print("正在生成 Cost Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        
+        print("正在生成 AUCC Plot (Uplift)...")
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
+        
+        print("正在生成 AUCC Plot (ROI)...")
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
         
         
-    # 筛选出对照组数据用于评估
-    control_df = eval_df[eval_df['treatment'] == 0]
+        
+        # 1127Addition：
+        # --- 新增评估逻辑 ---
+        from sklearn.metrics import roc_auc_score
 
-    if control_df.empty:
-        print("对照组无数据，跳过额外评估。")
-    else:
-        # 1. 统计模型预估值平均值和真实值平均值对比
-        print("\n模型预估值与真实值均值对比 (对照组):")
-        avg_pred_paid = control_df['ctrl_paid'].mean()
-        avg_true_paid = control_df['paid'].mean()
-        print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
+        print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
+        # 筛选出实验组数据用于评估
+        treatment_df = eval_df[eval_df['treatment'] == 1]
 
-        avg_pred_cost = control_df['ctrl_cost'].mean()
-        avg_true_cost = control_df['cost'].mean()
-        print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
+        if treatment_df.empty:
+            print("实验组无数据，跳过额外评估。")
+        else:
+            # 1. 统计模型预估值平均值和真实值平均值对比
+            print("\n模型预估值与真实值均值对比 (实验组):")
+            avg_pred_paid = treatment_df['treat_paid'].mean()
+            avg_true_paid = treatment_df['paid'].mean()
+            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-        # 2. 计算并展示 paid 和 cost 的 regAUC
-        print("\n计算 Regression AUC (regAUC, 在对照组上):")
+            avg_pred_cost = treatment_df['treat_cost'].mean()
+            avg_true_cost = treatment_df['cost'].mean()
+            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
-        def calculate_reg_auc(y_true, y_pred, label_name):
-            # 检查真实值是否都一样，无法计算AUC
-            if y_true.nunique() <= 1:
-                print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                return
+            # 2. 计算并展示 paid 和 cost 的 regAUC
+            print("\n计算 Regression AUC (regAUC, 在实验组上):")
 
-            # 将回归问题转化为二分类问题来计算AUC
-            binary_true = (y_true > y_true.median()).astype(int)
+            def calculate_reg_auc(y_true, y_pred, label_name):
+                # 检查真实值是否都一样，无法计算AUC
+                if y_true.nunique() <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+                    return
+
+                # 将回归问题转化为二分类问题来计算AUC
+                binary_true = (y_true > y_true.median()).astype(int)
+                
+                # 检查二分后的标签是否只有一个类别
+                if len(np.unique(binary_true)) <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+                    return
+                
+                reg_auc = roc_auc_score(binary_true, y_pred)
+                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+
+            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
+            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
             
-            # 检查二分后的标签是否只有一个类别
-            if len(np.unique(binary_true)) <= 1:
-                print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                return
             
-            reg_auc = roc_auc_score(binary_true, y_pred)
-            print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+        # 筛选出对照组数据用于评估
+        control_df = eval_df[eval_df['treatment'] == 0]
 
-        calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
-        calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
-    # --- 评估逻辑结束 ---
+        if control_df.empty:
+            print("对照组无数据，跳过额外评估。")
+        else:
+            # 1. 统计模型预估值平均值和真实值平均值对比
+            print("\n模型预估值与真实值均值对比 (对照组):")
+            avg_pred_paid = control_df['ctrl_paid'].mean()
+            avg_true_paid = control_df['paid'].mean()
+            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-# In[12]:
+            avg_pred_cost = control_df['ctrl_cost'].mean()
+            avg_true_cost = control_df['cost'].mean()
+            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
+            # 2. 计算并展示 paid 和 cost 的 regAUC
+            print("\n计算 Regression AUC (regAUC, 在对照组上):")
+
+            def calculate_reg_auc(y_true, y_pred, label_name):
+                # 检查真实值是否都一样，无法计算AUC
+                if y_true.nunique() <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+                    return
+
+                # 将回归问题转化为二分类问题来计算AUC
+                binary_true = (y_true > y_true.median()).astype(int)
+                
+                # 检查二分后的标签是否只有一个类别
+                if len(np.unique(binary_true)) <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+                    return
+                
+                reg_auc = roc_auc_score(binary_true, y_pred)
+                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+
+            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
+            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
+        # --- 评估逻辑结束 ---
+
+
+# In[ ]:
 
 import json
 import matplotlib.pyplot as plt
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
-def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png'):
+def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
     """
     从 JSON 文件加载一个或多个模型的 AUCC 数据并绘制对比图。
 
@@ -770,28 +1075,45 @@ def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png'):
     if not all_results:
         print("JSON 文件为空或格式不正确，无法绘图。")
         return
+    
+    results_to_plot = all_results
+    if model_names:
+        # 过滤出指定要绘制的模型
+        results_to_plot = {name: data for name, data in all_results.items() if name in model_names}
+        
+        # 提醒用户哪些指定的模型未找到
+        found_models = set(results_to_plot.keys())
+        not_found_models = set(model_names) - found_models
+        if not_found_models:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found_models)}")
+
+    if not results_to_plot:
+        print("没有找到可供绘制的模型数据。")
+        return
 
     plt.figure(figsize=(10, 8))
 
     # 绘制每个模型的 AUCC 曲线
-    for model_name, data in all_results.items():
-        if (model_name in model_paths_else or model_name in model_paths_DFCL) and 'x_coords' in data and 'y_coords' in data and 'aucc_score' in data:
+    for model_name, data in results_to_plot.items():
+        if 'x_coords' in data and 'y_coords' in data and 'aucc_score' in data:
+        # if (model_name in model_paths_else or model_name in model_paths_DFCL) and 'x_coords' in data and 'y_coords' in data and 'aucc_score' in data:
             plt.plot(data['x_coords'], data['y_coords'], marker='.', linestyle='-', label=f'{model_name} (AUCC = {data["aucc_score"]:.4f})')
-        elif (model_name in model_paths_else or model_name in model_paths_DFCL):
-            print(f"模型 '{model_name}' 的数据不完整，跳过绘图。")
+        # elif (model_name in model_paths_else or model_name in model_paths_DFCL):
+        #     # print(f"模型 '{model_name}' 的数据不完整，跳过绘图。")
+        #     pass
         else:
-            print(f"模型 '{model_name}' 不在本次绘图考虑范围内，跳过绘图。")
+            print(f"模型 '{model_name}' 的数据不完整，跳过绘图。")
 
     # 绘制随机线 (使用第一个模型的数据作为基准)
     # 假设所有模型的最终 ΔC 和 ΔR 相同
-    first_model_data = next(iter(all_results.values()))
+    first_model_data = next(iter(results_to_plot.values()))
     if 'x_coords' in first_model_data and 'y_coords' in first_model_data:
         max_delta_c = first_model_data['x_coords'][-1]
         max_delta_r = first_model_data['y_coords'][-1]
         plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
 
     plt.title('AUCC Curve Comparison')
-    plt.xlabel('Cumulative visit Difference (ΔC)')
+    plt.xlabel('Cumulative Cost Difference (ΔC)')
     plt.ylabel('Cumulative Reward Difference (ΔR)')
     plt.legend()
     plt.grid(True)
@@ -806,24 +1128,24 @@ json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path, output_image_path)
-
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+""
 #  'result_aucc_2.json'
-json_file_path_2 = aucc_v2_save_path
+json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path_2, output_image_path_2)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
 
 
-# In[13]:
+# In[22]:
 
 
 import json
 import matplotlib.pyplot as plt
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
-def plot_auuc_from_json(json_path: str, plot_path: str = 'auuc_comparison.png'):
+def plot_auuc_from_json(json_path: str, plot_path: str = 'auuc_comparison.png', model_names: Optional[List[str]] = None):
     try:
         with open(json_path, 'r', encoding='utf-8') as f:
             all_results: Dict[str, Dict[str, Any]] = json.load(f)
@@ -834,21 +1156,34 @@ def plot_auuc_from_json(json_path: str, plot_path: str = 'auuc_comparison.png'):
     if not all_results:
         print("JSON 文件为空或格式不正确，无法绘图。")
         return
+    
+    results_to_plot = all_results
+    if model_names:
+        # 过滤出指定要绘制的模型
+        results_to_plot = {name: data for name, data in all_results.items() if name in model_names}
+        
+        # 提醒用户哪些指定的模型未找到
+        found_models = set(results_to_plot.keys())
+        not_found_models = set(model_names) - found_models
+        if not_found_models:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found_models)}")
+
+    if not results_to_plot:
+        print("没有找到可供绘制的模型数据。")
+        return
 
     plt.figure(figsize=(10, 8))
 
     # 绘制每个模型的 AUUC 曲线
-    for model_name, data in all_results.items():
-        if (model_name in model_paths_else or model_name in model_paths_DFCL) and 'x_coords' in data and 'y_coords' in data and 'auuc_score' in data:
+    for model_name, data in results_to_plot.items():
+        if 'x_coords' in data and 'y_coords' in data and 'auuc_score' in data:
             plt.plot(data['x_coords'], data['y_coords'], marker='.', linestyle='-', label=f'{model_name} (AUUC = {data["auuc_score"]:.4f})')
-        elif (model_name in model_paths_else or model_name in model_paths_DFCL):
-            print(f"模型 '{model_name}' 的数据不完整，跳过绘图。")
         else:
-            print(f"模型 '{model_name}' 不在本次绘图考虑范围内，跳过绘图。")
+            print(f"模型 '{model_name}' 的数据不完整，跳过绘图。")
 
     # 绘制随机基线
     # 由于坐标已归一化，随机基线是一条从(0,0)到(1,1)的对角线
-    first_model_data = next(iter(all_results.values()))
+    first_model_data = next(iter(results_to_plot.values()))
     if 'baseline_auuc' in first_model_data:
         baseline_score = first_model_data['baseline_auuc']
         plt.plot([0, 1], [0, 1], color='k', linestyle='--', 
@@ -865,9 +1200,8 @@ def plot_auuc_from_json(json_path: str, plot_path: str = 'auuc_comparison.png'):
     plt.close()
     print(f"AUUC 曲线对比图已保存至: {plot_path}")
     
-json_file_path_auuc = auuc_path
+json_file_path_auuc = auuc_save_path
 output_image_path_auuc = f'result/auuc_curves_{current_time}.png'
 
 # 调用函数生成图像
-plot_auuc_from_json(json_file_path_auuc, output_image_path_auuc)
-# %%
+plot_auuc_from_json(json_file_path_auuc, output_image_path_auuc, model_names = model_paths_DFCL + model_paths_else)

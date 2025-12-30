@@ -6,6 +6,62 @@ from __future__ import print_function
 import tensorflow as tf
 import subprocess
 import re
+
+algo_conf = {
+# 清除以脱敏信息
+}
+
+
+
+# class TFRecordData:
+#     def __init__(self):
+#         self.data_conf = algo_conf['dataset']
+#         self._generate_example_parser()
+
+#     def _generate_example_parser(self):
+#         dtype_map = {
+#             "int": tf.int64,
+#             "float": tf.float32,
+#             "string": tf.string
+#         }
+#         default_map = {
+#             "int": 0,
+#             "float": 0.0,
+#             "string": ""
+#         }
+#         example_parse_dict = {}
+#         for column in self.data_conf["columns"]:
+#             for name in column["names"]:
+#                 default_value = column['default_value'] if 'default_value' in column else default_map[column['dtype']]
+#                 example_parse_dict[name] = tf.io.FixedLenFeature(shape=[], dtype=dtype_map[column['dtype']],
+#                                                                  default_value=default_value)
+#         self.example_parse_dict = example_parse_dict
+
+#     def prepare_dataset(self,
+#                         sample_path,
+#                         phase='train',
+#                         threshold=None,
+#                         batch_size=1024,
+#                         shuffle=False,
+#                         shuffle_buffer=2048):
+
+#         def _parse_func(example_proto):
+#             parsed_example = tf.io.parse_single_example(serialized=example_proto, features=self.example_parse_dict)
+#             if threshold is not None and phase == 'predict':
+#                 parsed_example['threshold'] = tf.ones_like(parsed_example['threshold']) * threshold
+#             return parsed_example
+
+#         # Generate Sample-Batch
+#         # files will be shuffled randomly, default as True
+#         dataset = tf.data.TFRecordDataset(tf.data.Dataset.list_files(sample_path, shuffle=True))
+#         dataset = dataset.map(_parse_func, num_parallel_calls=4)#tf.data.AUTOTUNE导致内存不足
+#         dataset = dataset.shuffle(buffer_size=shuffle_buffer) if shuffle and phase == 'train' else dataset
+#         dataset = dataset.batch(batch_size, drop_remainder=True if phase == 'train' else False)
+#         dataset = dataset.prefetch(1)
+#         return dataset
+
+# -*- encoding=utf-8 -*-
+import tensorflow as tf
 import pandas as pd
 import numpy as np
 from typing import Optional, Dict, Any
@@ -30,6 +86,7 @@ algo_conf = {
 class CSVData:
     def __init__(self):
         self.data_conf = algo_conf['dataset']
+        self.rename_map = {'conversion': 'paid', 'visit': 'cost'}
         self._generate_feature_spec()
         
     def _generate_feature_spec(self):
@@ -57,28 +114,10 @@ class CSVData:
                 
                 self.column_names.append(name)
                 self.column_defaults.append([default_value])
-                self.output_types[name] = dtype
-                self.output_shapes[name] = tf.TensorShape([])
+                output_name = self.rename_map.get(name, name)
+                self.output_types[output_name] = dtype
+                self.output_shapes[output_name] = tf.TensorShape([])
     
-    def _rename_columns(self, features):
-        """
-        重命名特定列
-        conversion -> paid
-        visit -> cost
-        """
-        # 注意：在Graph模式下，尽量避免原地修改(inplace)，虽然字典操作通常兼容
-        # 但为了安全起见，显式地进行键值转移
-        
-        # 1. 检查是否存在 'conversion'，将其赋值给 'paid' 并删除原键
-        if 'conversion' in features:
-            features['paid'] = features.pop('conversion')
-            
-        # 2. 检查是否存在 'visit'，将其赋值给 'cost' 并删除原键
-        if 'visit' in features:
-            features['cost'] = features.pop('visit')
-            
-        return features
-
     def _parse_csv_line(self, line):
         """解析CSV单行数据"""
         # 将CSV行拆分为字段
@@ -86,6 +125,11 @@ class CSVData:
         
         # 将字段打包为字典
         features = dict(zip(self.column_names, fields))
+
+        # 根据rename_map重命名列
+        for old_name, new_name in self.rename_map.items():
+            if old_name in features:
+                features[new_name] = features.pop(old_name)
         return features
     
     def prepare_dataset(self,
@@ -121,9 +165,6 @@ class CSVData:
         # 解析CSV数据
         dataset = dataset.map(self._parse_csv_line, num_parallel_calls=4)
         
-        # 执行列重命名逻辑
-        dataset = dataset.map(self._rename_columns, num_parallel_calls=4)
-
         # 添加阈值（仅predict阶段）
         if threshold is not None and phase == 'predict':
             dataset = dataset.map(

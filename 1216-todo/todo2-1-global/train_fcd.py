@@ -6,6 +6,9 @@ import numpy as np
 import math
 import json
 import shutil
+import argparse
+import random
+import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -32,6 +35,37 @@ import argparse # 导入 argparse 模块
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
+
+# 强制UTF-8编码
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # In[7]:
 
@@ -60,8 +94,8 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
     'model_class_name': 'EcomDFCL_v3',
-    'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
-    'loss_function': '2pll',  # 3erl, 
+    'model_path': './model/EcomDFCL_v3_2pll_2pos_lr3_alpha=0.1',
+    'loss_function': '2pll',  # 3erl, 4ifdl
     'last_model_path': '',
     'train_data': '../../data/criteo_train.csv', 
     'val_data': '../../data/criteo_val.csv',
@@ -71,6 +105,7 @@ config = {
     'summary_steps': 1000,
     'first_decay_steps': 1000,
     'clipnorm': 5e3,
+    'alpha': 0.1,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -84,6 +119,7 @@ parser.add_argument('--loss_function', type=str, default=config['loss_function']
 parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 
 args = parser.parse_args()
 
@@ -94,6 +130,7 @@ config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
 config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
+config['lr'] = args.lr
 
 
 print("--- 运行配置 ---")
@@ -103,6 +140,7 @@ print(f"Decision Loss Function: {config['loss_function']}")
 print(f"Alpha: {config['alpha']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
+print(f"learning rate: {config['lr']}")
 print("--------------------")
 
 # In[9]:

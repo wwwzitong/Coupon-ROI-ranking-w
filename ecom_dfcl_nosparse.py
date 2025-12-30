@@ -1,16 +1,8 @@
 import tensorflow as tf
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-
-import os
-import sys
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if CODE_DIR not in sys.path:
-    sys.path.insert(0, CODE_DIR)
-
 from data_utils import *
-
 # 1120修改，将treatment纳入特征，形成标准的预测网络
-SPARSE_FEATURE_NAME = []
+SPARSE_FEATURE_NAME = []  # 暂时不使用任何 sparse feature（因此 sparse_vectors 为空）
 DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
 SPARSE_FEATURE_NAME_SLOT_ID = {}
 statistical_config={
@@ -19,54 +11,25 @@ statistical_config={
     'N0':1677550
 }
 
-
 class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型集成了 GradNorm 和自定义决策损失。
     """
-    def __init__(self, alpha=1.2, dense_stats=None, fcd_mode='log1p', loss_function='2pll', **kwargs):
+    def __init__(self, alpha=1.2, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
         self.alpha = alpha #prediction loss前面的系数
-        self.loss_function = loss_function
         
         # 从 fsfc.py 导入配置
         self.sparse_feature_names = SPARSE_FEATURE_NAME
+        # 是否在 task tower 输入中拼接 treatment 的 embedding
+        # 当不使用 sparse feature 时，该值为 False
         self._use_treatment_embedding = ('treatment' in self.sparse_feature_names)
         self.dense_feature_names = DENSE_FEATURE_NAME
         self.sparse_feature_slot_map = SPARSE_FEATURE_NAME_SLOT_ID
         self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
-
-        # ===== 新增 =====
-        # dense_stats 期望格式：
-        # {
-        #   "raw":   {"mean": [..], "std": [..]},
-        #   "log1p": {"mean": [..], "std": [..]}
-        # }
-        self.fcd_mode = fcd_mode
-        self._dense_global_mean = None  # shape: [num_dense]
-        self._dense_global_std = None   # shape: [num_dense]
-        if dense_stats is not None:
-            stats_obj = dense_stats.get(self.fcd_mode, dense_stats)
-            mean_list = stats_obj.get("mean")
-            std_list = stats_obj.get("std")
-            if mean_list is None or std_list is None:
-                raise ValueError(f"dense_stats 缺少 mean/std: keys={list(stats_obj.keys())}")
-
-            mean = tf.convert_to_tensor(mean_list, dtype=tf.float32)
-            std = tf.convert_to_tensor(std_list, dtype=tf.float32)
-
-            self._dense_global_mean = mean
-            self._dense_global_std = std
-        # # 先放占位，真正值由 set_global_fcd_stats() 注入
-        # n_dense = len(self.dense_feature_names)
-        # self.global_raw_mean = tf.zeros([n_dense], dtype=tf.float32)
-        # self.global_raw_std  = tf.ones([n_dense], dtype=tf.float32)
-        # self.global_log_mean = tf.zeros([n_dense], dtype=tf.float32)
-        # self.global_log_std  = tf.ones([n_dense], dtype=tf.float32)
-        # ===== 新增结束 =====
 
         # 模型超参数 TODO：需要依据实际数据集进行修改
         self.sparse_feature_dim = 8 # TODO：简化为4
@@ -74,7 +37,6 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
 #         self.ratios = [0.1, 0.5, 1.0]  #先用少量测试
         self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
-        # self.targets = ['paid', 'cost']
         self.targets = ['paid', 'cost']
         
         self.total_samples = statistical_config['N']
@@ -116,9 +78,8 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         # 【修改2】为 task_towers 的构建也明确输入维度
         # 这是第二步处理的关键：塔的输入 = user_tower输出 + treatment嵌入向量
         user_tower_output_dim = 128 # user_tower 最后一层的维度
-        # task_tower_input_dim = user_tower_output_dim + self.sparse_feature_dim
         task_tower_input_dim = user_tower_output_dim + (self.sparse_feature_dim if self._use_treatment_embedding else 0)
-        
+
         for target in self.targets:
             for treatment in self.treatment_order:
                 name = "{}_treatment_{}_tower".format(target, treatment)
@@ -153,27 +114,6 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                 name="embedding_slot_{}".format(slot_id)
             )
 
-    # # ===== 新增：注入全局统计量（raw/log）=====
-    # def set_global_fcd_stats(self, raw_mean, raw_std, log_mean, log_std):
-    #     """
-    #     raw_mean/raw_std/log_mean/log_std:
-    #     - 可以是 dict: {feature_name: float}
-    #     - 或 list/np.array: 顺序必须和 self.dense_feature_names 一致
-    #     """
-    #     names = self.dense_feature_names
-
-    #     def _to_vec(x):
-    #         if isinstance(x, dict):
-    #             return [float(x[n]) for n in names]
-    #         return [float(v) for v in x]
-
-    #     self.global_raw_mean = tf.constant(_to_vec(raw_mean), dtype=tf.float32)
-    #     self.global_raw_std  = tf.constant(_to_vec(raw_std),  dtype=tf.float32)
-    #     self.global_log_mean = tf.constant(_to_vec(log_mean), dtype=tf.float32)
-    #     self.global_log_std  = tf.constant(_to_vec(log_std),  dtype=tf.float32)
-
-    # ===== 新增结束 =====
-
     def call(self, inputs, training=True): # 定义数据从输入到输出的完整流动路径       
         # 特征处理
         sparse_vectors = []
@@ -193,43 +133,12 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             embedding_vector = self.embedding_layers[slot_id](hashed_output)
             sparse_vectors.append(embedding_vector)
 
-        for i, feature_name in enumerate(self.dense_feature_names):
-            # fcd变换之前记录数据分布
-            raw_val = inputs[feature_name]
-            if training:
-                if not hasattr(self, "_last_raw_inputs"):
-                    self._last_raw_inputs = {}
-                # 保存原始分布 (展平以便计算统计量)
-                self._last_raw_inputs[feature_name] = tf.reshape(raw_val, [-1])
-
-            # ======= 修改开始 =======
-            fcd = tf.cast(inputs[feature_name], tf.float32)
-            fcd = tf.maximum(fcd, 0.0)
-            if self.fcd_mode == 'log1p':
-                fcd = tf.math.log1p(fcd)
-            
-            if self._dense_global_mean is not None and self._dense_global_std is not None:
-                mean = self._dense_global_mean[i]
-                std = self._dense_global_std[i]
-                fcd = (fcd - mean) / (std + 1e-8)
-            else:
-                fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
-
+        for feature_name in self.dense_feature_names:
+            fcd = inputs[feature_name]
+            fcd = tf.math.log1p(tf.maximum(fcd,0.0))
+            fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
             dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
-            # ======= 修改结束 =======
 
-            # fcd = inputs[feature_name]
-            # fcd = tf.math.log1p(tf.maximum(fcd,0.0))
-            # fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
-            # dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
-
-            # fcd变换之后记录数据分布
-            if training:
-                if not hasattr(self, "_last_fcd"):
-                    self._last_fcd = {}
-                self._last_fcd[feature_name] = tf.reshape(fcd, [-1])  # 展平成一维便于 histogram
-        
-        # concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
         concat_input = tf.concat(dense_vectors if not sparse_vectors else (sparse_vectors + dense_vectors), axis=1)
         
 #         shared_output = self.user_tower(concat_input, training=training)
@@ -241,12 +150,10 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             # 使用一个在 tf.function 中唯一的名称
             user_tower_activations[f"layer_{i}_{layer.name}"] = x
         shared_output = x
-         
+        
         predictions = {}
-        # 根据 __init__ 中的定义，塔的输入是 shared_output 和 treatment 嵌入的拼接
-        # sparse_vectors[0] 是 treatment 嵌入，因为它是唯一的稀疏特征
-        # treatment_embedding = sparse_vectors[0]
-        # tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
+        # task tower 的输入：默认只用 shared_output；
+        # 只有当 sparse_feature_names 中包含 treatment 时，才会拼接 treatment embedding。
         if self._use_treatment_embedding:
             # 兼容未来 sparse_feature_names 不止一个的情况：按名字找 treatment 的位置
             treatment_idx = self.sparse_feature_names.index('treatment')
@@ -254,13 +161,12 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
         else:
             tower_input = shared_output
-
+        
         for name, tower in self.task_towers.items():
             # name is like "paid_treatment_30_tower"
             pred_name = name.replace('_tower', '')
             logit = tower(tower_input, training=training)
             predictions[pred_name] = tf.reshape(logit, [-1])
-                
         self._last_shared_output = shared_output
         self._last_user_tower_activations = user_tower_activations
         return predictions
@@ -651,22 +557,6 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         tf.summary.scalar(f"{name}/min", tf.reduce_min(tensor), step=step)
         tf.summary.histogram(f"{name}/histogram", tensor, step=step)
 
-        # ===== 新增：偏度 & 超额峰度 =====
-        x = tf.cast(tf.reshape(tensor, [-1]), tf.float32)
-        mean = tf.reduce_mean(x)
-        std = tf.math.reduce_std(x) + 1e-8
-        centered = x - mean
-
-        m3 = tf.reduce_mean(tf.pow(centered, 3))
-        m4 = tf.reduce_mean(tf.pow(centered, 4))
-
-        skewness = m3 / tf.pow(std, 3)
-        excess_kurtosis = m4 / tf.pow(std, 4) - 3.0
-
-        tf.summary.scalar(f"{name}/skewness", skewness, step=step)
-        tf.summary.scalar(f"{name}/excess_kurtosis", excess_kurtosis, step=step)
-
-
     def _compute_cosine_similarity(self, grads1, grads2):
         """计算两组梯度之间的余弦相似度"""
         dot_product = tf.constant(0.0, dtype=tf.float32)
@@ -711,15 +601,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             model_variables = [v for v in self.trainable_variables if 'loss_weights' not in v.name]
 
             paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
-            if self.loss_function == '2pll':
-                decision_loss = self.decision_policy_learning_loss(predictions, labels)
-            elif self.loss_function == '3erl':
-                decision_loss = self.decision_entropy_regularized_loss(predictions, labels)
-            elif self.loss_function == '4ifdl':
-                decision_loss = self.decision_improved_finite_difference_loss(predictions, labels)
-            else:
-                print("loss function NOT found! Use 2pll instead!")
-                decision_loss = self.decision_policy_learning_loss(predictions, labels)
+            decision_loss = self.decision_policy_learning_loss(predictions, labels)
             
             # --- 进阶监控 3 (续): 检查最终loss ---
             paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in paid_loss")
@@ -748,18 +630,6 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         
         # --- 梯度分析与监控 ---
         step = self.optimizer.iterations
-
-        # 把每个feature的 fcd 变换之前的分布写进 TensorBoard
-        if hasattr(self, "_last_raw_inputs"):
-            for fname, ftensor in self._last_raw_inputs.items():
-                # 存放在 preprocess/raw/ 下，与 preprocess/fcd/ 形成对比
-                self._add_summaries(f"preprocess/raw/{fname}", ftensor, step=step)
-
-        # 把每个feature的 fcd 变换之后的分布写进 TensorBoard
-        if hasattr(self, "_last_fcd"):
-            for fname, ftensor in self._last_fcd.items():
-                self._add_summaries(f"preprocess/fcd/{fname}", ftensor, step=step)
-        
         
         # 5.1. 计算并记录各部分梯度的范数（大小）
         # 这可以告诉我们哪个loss产生的梯度“力量”更大
@@ -846,16 +716,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in validation prediction: {name}")
 
         paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
-        
-        if self.loss_function == '2pll':
-            decision_loss = self.decision_policy_learning_loss(predictions, labels)
-        elif self.loss_function == '3erl':
-            decision_loss = self.decision_entropy_regularized_loss(predictions, labels)
-        elif self.loss_function == '4ifdl':
-            decision_loss = self.decision_improved_finite_difference_loss(predictions, labels)
-        else:
-            print("loss function NOT found! Use 2pll instead!")
-            decision_loss = self.decision_policy_learning_loss(predictions, labels)
+        decision_loss = self.decision_policy_learning_loss(predictions, labels)
         
         paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in val_paid_loss")
         cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in val_cost_loss")
