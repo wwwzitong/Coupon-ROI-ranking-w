@@ -13,7 +13,7 @@ environment.yml
 # model、result、log先不上传
 model/
 model_new_nnmodel/
-model_3erl_tau
+model_3erl_tau/
 best_models/
 
 result/
