@@ -106,6 +106,7 @@ config = {
     'first_decay_steps': 1000,
     'clipnorm': 5e3,
     'alpha': 0.1,
+    'tau': 1.2,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -120,6 +121,8 @@ parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for th
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--tau', type=float, default=1.2, help='temprature tau')
+
 
 args = parser.parse_args()
 
@@ -131,6 +134,7 @@ config['alpha'] = args.alpha
 config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
 config['lr'] = args.lr
+config['tau'] = args.tau
 
 
 print("--- 运行配置 ---")
@@ -138,6 +142,7 @@ print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"Decision Loss Function: {config['loss_function']}")
 print(f"Alpha: {config['alpha']}")
+print(f"tau(3erl): {config['tau']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['lr']}")
@@ -304,7 +309,7 @@ with strategy.scope():
     model_class = globals()[config['model_class_name']]
     # model = model_class()
     # 将 alpha 传入模型构造函数
-    model = model_class(alpha=config['alpha'], loss_function=config['loss_function'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats,)
+    model = model_class(alpha=config['alpha'], loss_function=config['loss_function'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats, tau=config['tau'])
     optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
     # optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
     # 学习率调度器：带 Warmup 的余弦退火

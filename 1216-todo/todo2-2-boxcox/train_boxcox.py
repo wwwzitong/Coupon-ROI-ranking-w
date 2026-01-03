@@ -47,7 +47,7 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 config = {
     'model_class_name': 'EcomDFCL_v3',
     'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
-    'loss_function': '2pll',  # 3erl, ...
+    'loss_function': '2pll',  # 3erl, 4ifdl
     'alpha': 0.1,
     'last_model_path': '',
     'train_data': '../../data/criteo_train.csv',
@@ -73,6 +73,7 @@ parser.add_argument('--loss_function', type=str, default=config['loss_function']
 parser.add_argument('--alpha', type=float, default=config['alpha'],
                     help='Alpha value for the loss function.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 
 args = parser.parse_args()
 
@@ -80,6 +81,7 @@ config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
 config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
+config['learning_rate'] = args.lr
 config['clipnorm'] = args.clipnorm
 
 
@@ -89,6 +91,7 @@ print(f"Model Path: {config['model_path']}")
 print(f"Decision Loss Function: {config['loss_function']}")
 print(f"Alpha: {config['alpha']}")
 print(f"clipnorm: {config['clipnorm']}")
+print(f"learning rate: {config['learning_rate']}")
 print("--------------------")
 
 

@@ -116,8 +116,8 @@ config = {
     'eval_data': '../../data/criteo_train.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
-    'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
-    'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
+    'aucc_save_path': "result-4ifdl/result_aucc.json", #保存好坐标点，以便后续画图
+    'auuc_save_path': "result-4ifdl/result_auuc.json" #保存好坐标点，以便后续画图
 }
 # # 训练集上试试
 # config = {
@@ -166,52 +166,22 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=5e3_global_raw_tau=1.2",
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=5e3_global_log1p_tau=1.2",
-
-    
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=100_global_raw_tau=1.2",
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=100_global_log1p_tau=1.2",
-
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=10_global_raw_tau=1.2",
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=10_global_log1p_tau=1.2",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=0.1_clip=5e3_global_raw",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=0.5_clip=5e3_global_raw",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=1.0_clip=5e3_global_raw",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=1.5_clip=5e3_global_raw",
 ]
 model_paths_else = [
 
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=10.0_clip=5e3_global_raw",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=100.0_clip=5e3_global_raw",
+
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=0.1_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=0.5_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=1.0_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=1.5_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=10.0_clip=5e3_global_log1p",
+    "./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=100.0_clip=5e3_global_log1p",
 ]
 
 
@@ -375,7 +345,7 @@ def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatmen
 
      # 1. 读取现有数据 看清楚路径
     try:
-        with open("result/result_aucc_v2.json", 'r', encoding='utf-8') as f:
+        with open("result-4ifdl/result_aucc_v2.json", 'r', encoding='utf-8') as f:
             all_results = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         all_results = {}
@@ -387,7 +357,7 @@ def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatmen
         'y_coords': norm_y_coords
     }
     
-    with open("result/result_aucc_v2.json", 'w', encoding='utf-8') as f:
+    with open("result-4ifdl/result_aucc_v2.json", 'w', encoding='utf-8') as f:
         json.dump(all_results, f, indent=4)
 
     return aucc_score
@@ -396,7 +366,7 @@ def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatmen
 # In[10]:
 
 
-def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv"):
+def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result-4ifdl/dip_samples.csv"):
     '''
     公司另外一个版本的AUCC,分bins去作图，以bins中的第一个user作为落点依据。图会更加的平滑。无其他过滤逻辑。
     '''
@@ -487,7 +457,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
 
      # 1. 读取现有数据 看清楚路径
     try:
-        with open("result/result_aucc_v2.json", 'r', encoding='utf-8') as f:
+        with open("result-4ifdl/result_aucc_v2.json", 'r', encoding='utf-8') as f:
             all_results = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         all_results = {}
@@ -499,7 +469,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
         'y_coords': norm_y_coords
     }
     
-    with open("result/result_aucc_v2.json", 'w', encoding='utf-8') as f:
+    with open("result-4ifdl/result_aucc_v2.json", 'w', encoding='utf-8') as f:
         json.dump(all_results, f, indent=4)
 
     return aucc_score
@@ -992,11 +962,11 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        print("正在生成 Paid Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        # print("正在生成 Paid Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
-        print("正在生成 Cost Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        # print("正在生成 Cost Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
@@ -1167,17 +1137,17 @@ def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png', 
     
 #  'result_aucc.json'
 json_file_path = aucc_save_path
-output_image_path = f'result/aucc_curves_{current_time}.png'
+output_image_path = f'result-4ifdl/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
 ""
 #  'result_aucc_2.json'
-json_file_path_2 = 'result/result_aucc_v2.json'
-output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
+json_file_path_2 = 'result-4ifdl/result_aucc_v2.json'
+output_image_path_2 = f'result-4ifdl/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
 
 
 # In[22]:
@@ -1243,7 +1213,7 @@ def plot_auuc_from_json(json_path: str, plot_path: str = 'auuc_comparison.png', 
     print(f"AUUC 曲线对比图已保存至: {plot_path}")
     
 json_file_path_auuc = auuc_save_path
-output_image_path_auuc = f'result/auuc_curves_{current_time}.png'
+output_image_path_auuc = f'result-4ifdl/auuc_curves_{current_time}.png'
 
 # 调用函数生成图像
 # plot_auuc_from_json(json_file_path_auuc, output_image_path_auuc, model_names = model_paths_DFCL + model_paths_else)

@@ -13,10 +13,15 @@ environment.yml
 # model、result、log先不上传
 model/
 model_new_nnmodel/
+model_3erl_tau
+best_models/
 
 result/
 result_new_nnmodel/
 result-2pll/
+result-3erl/
+result-4ifdl/
+result-3erl-tau=1.2/
 result-till-1226
 
 log/

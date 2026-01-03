@@ -166,7 +166,8 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_v3_2pll_2pos_lr3_alpha=0.5_clip=10_global_log1p",
+    # "./model/EcomDFCL_v3_2pll_2pos_lr3_alpha=0.5_clip=10_global_log1p",
+    "./model_3erl_tau/EcomDFCL_v3_3erl_2pos_lr3_alpha=0.5_clip=10_global_log1p_tau=1.5",
 ]
 model_paths_else = [
 ]

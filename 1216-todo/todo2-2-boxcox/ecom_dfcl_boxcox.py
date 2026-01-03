@@ -8,10 +8,9 @@ if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 from data_utils import *
 # 1120修改，将treatment纳入特征，形成标准的预测网络
-SPARSE_FEATURE_NAME = ["treatment"]
+SPARSE_FEATURE_NAME = []
 DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
 SPARSE_FEATURE_NAME_SLOT_ID = {
-    'treatment': 1024  # 为 treatment 分配一个唯一的 slot_id
 }
 statistical_config={
     'N':11183673,
@@ -39,6 +38,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         
         # 从 fsfc.py 导入配置
         self.sparse_feature_names = SPARSE_FEATURE_NAME
+        self._use_treatment_embedding = ('treatment' in self.sparse_feature_names)
         self.dense_feature_names = DENSE_FEATURE_NAME
         self.sparse_feature_slot_map = SPARSE_FEATURE_NAME_SLOT_ID
         self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
@@ -90,7 +90,8 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         # 【修改2】为 task_towers 的构建也明确输入维度
         # 这是第二步处理的关键：塔的输入 = user_tower输出 + treatment嵌入向量
         user_tower_output_dim = 128 # user_tower 最后一层的维度
-        task_tower_input_dim = user_tower_output_dim + self.sparse_feature_dim
+        # task_tower_input_dim = user_tower_output_dim + self.sparse_feature_dim
+        task_tower_input_dim = user_tower_output_dim + (self.sparse_feature_dim if self._use_treatment_embedding else 0)
 
         for target in self.targets:
             for treatment in self.treatment_order:
@@ -209,7 +210,8 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
                     self._last_fcd = {}
                 self._last_fcd[feature_name] = tf.reshape(fcd, [-1])  # 展平成一维便于 histogram
 
-        concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
+        # concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
+        concat_input = tf.concat(dense_vectors if not sparse_vectors else (sparse_vectors + dense_vectors), axis=1)
         
 #         shared_output = self.user_tower(concat_input, training=training)
         # 为了监控中间层激活，手动执行 user_tower 的前向传播
@@ -224,8 +226,17 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         predictions = {}
         # 根据 __init__ 中的定义，塔的输入是 shared_output 和 treatment 嵌入的拼接
         # sparse_vectors[0] 是 treatment 嵌入，因为它是唯一的稀疏特征
-        treatment_embedding = sparse_vectors[0]
-        tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
+        # treatment_embedding = sparse_vectors[0]
+        # tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
+
+        if self._use_treatment_embedding:
+            # 兼容未来 sparse_feature_names 不止一个的情况：按名字找 treatment 的位置
+            treatment_idx = self.sparse_feature_names.index('treatment')
+            treatment_embedding = sparse_vectors[treatment_idx]
+            tower_input = tf.concat([shared_output, treatment_embedding], axis=1)
+        else:
+            tower_input = shared_output
+
         for name, tower in self.task_towers.items():
             # name is like "paid_treatment_30_tower"
             pred_name = name.replace('_tower', '')
@@ -682,7 +693,16 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             model_variables = [v for v in self.trainable_variables if 'loss_weights' not in v.name]
 
             paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
-            decision_loss = self.decision_policy_learning_loss(predictions, labels)
+            # decision_loss = self.decision_policy_learning_loss(predictions, labels)
+            if self.loss_function == '2pll':
+                decision_loss = self.decision_policy_learning_loss(predictions, labels)
+            elif self.loss_function == '3erl':
+                decision_loss = self.decision_entropy_regularized_loss(predictions, labels)
+            elif self.loss_function == '4ifdl':
+                decision_loss = self.decision_improved_finite_difference_loss(predictions, labels)
+            else:
+                print("loss function NOT found! Use 2pll instead!")
+                decision_loss = self.decision_policy_learning_loss(predictions, labels)
             
             # --- 进阶监控 3 (续): 检查最终loss ---
             paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in paid_loss")
@@ -809,7 +829,16 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
             predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in validation prediction: {name}")
 
         paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
-        decision_loss = self.decision_policy_learning_loss(predictions, labels)
+        # decision_loss = self.decision_policy_learning_loss(predictions, labels)
+        if self.loss_function == '2pll':
+            decision_loss = self.decision_policy_learning_loss(predictions, labels)
+        elif self.loss_function == '3erl':
+            decision_loss = self.decision_entropy_regularized_loss(predictions, labels)
+        elif self.loss_function == '4ifdl':
+            decision_loss = self.decision_improved_finite_difference_loss(predictions, labels)
+        else:
+            print("loss function NOT found! Use 2pll instead!")
+            decision_loss = self.decision_policy_learning_loss(predictions, labels)
         
         paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in val_paid_loss")
         cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in val_cost_loss")

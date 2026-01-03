@@ -25,8 +25,9 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型集成了 GradNorm 和自定义决策损失。
     """
-    def __init__(self, alpha=1.2, dense_stats=None, fcd_mode='log1p', loss_function='2pll', **kwargs):
+    def __init__(self, alpha=1.2, dense_stats=None, fcd_mode='log1p', loss_function='2pll', tau=1.2, **kwargs):
         super().__init__(**kwargs)
+        self.tau = tau
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight= 95.30/(100-95.30)
         self.alpha = alpha #prediction loss前面的系数
