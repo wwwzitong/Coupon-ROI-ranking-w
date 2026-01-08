@@ -26,4 +26,4 @@ call python train_boxcox.py --model_class_name EcomDFCL_v3 --loss_function 4ifdl
 call python train_boxcox.py --model_class_name EcomDFCL_v3 --loss_function 4ifdl --alpha 10.0 --clipnorm 10 --model_path ./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=10.0_clip=10_boxcox
 call python train_boxcox.py --model_class_name EcomDFCL_v3 --loss_function 4ifdl --alpha 100.0 --clipnorm 10 --model_path ./model/EcomDFCL_v3_4ifdl_2pos_lr3_alpha=100.0_clip=10_boxcox
 
-call python Evaluation.py
+@REM call python Evaluation.py

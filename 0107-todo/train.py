@@ -1,23 +1,27 @@
 from __future__ import print_function, absolute_import, division
 import os
+import io
+import sys
+import shutil
 import tensorflow as tf
 import argparse
 import random
 # from tensorflow import keras
 import numpy as np
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+from dfcl_regretNet_v1_rc_raw import EcomDFCL_regretNet_rc
+from dfcl_regretNet_v1_rplusc_raw import EcomDFCL_regretNet_rplusc
+from dfcl_regretNet_v2_tau_raw import EcomDFCL_regretNet_tau
+
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
 from data_utils import *
-from ecom_dfcl_nosparse import EcomDFCL_v3
-# from ecom_dfcl_copy_0926 import EcomDFCL_re
-# from ecom_drm import EcomDRM19
-# from ecom_dfl import EcomDFL
-# from ecom_dfcl_gradnorm import EcomDFCL_gradnorm
-# from ecom_slearner import EcomDFCL_only_pl
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-
-import sys
-import io
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):
@@ -81,15 +85,17 @@ config = {
     'model_path': './model/EcomDFCL_v3_2pll_2pos_gradient_lr3_alpha=0.1',
     'last_model_path': '',
     'loss_function': '2pll',  # 3erl, 
-    'train_data': './data/criteo_train.csv', 
-    'val_data': './data/criteo_val.csv',
+    'train_data': '../data/criteo_train.csv', 
+    'val_data': '../data/criteo_val.csv',
     'batch_size': 256,
     'num_epochs': 50,
     'learning_rate': 0.001,
     'summary_steps': 1000,
-    'alpha': 0.1,
+    # 'alpha': 0.1,
     'clipnorm': 5e3,
     'first_decay_steps': 1000,
+    'max_multiplier': 1.0,
+    'scheduler': 'raw',
 }
 
 parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
@@ -99,9 +105,11 @@ parser.add_argument('--model_path', type=str, default=config['model_path'],
                     help='The path to save the model and logs.')
 parser.add_argument('--loss_function', type=str, default=config['loss_function'],
                     help='The expression of decision loss function.')
-parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
+# parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
+parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
 
 
 args = parser.parse_args()
@@ -110,19 +118,22 @@ args = parser.parse_args()
 config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
 config['loss_function'] = args.loss_function
-config['alpha'] = args.alpha
+# config['alpha'] = args.alpha
 config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
-
+config['max_multiplier'] = args.max_multiplier
+config['scheduler'] = args.scheduler
 
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"Decision Loss Function: {config['loss_function']}")
-print(f"Alpha: {config['alpha']}")
+# print(f"Alpha: {config['alpha']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
+print(f"scheduler: {config['scheduler']}")
+print(f"max_multiplier: {config['max_multiplier']}")
 print("--------------------")
 
 # In[9]:
@@ -138,18 +149,23 @@ global_batch_size = config['batch_size'] * strategy.num_replicas_in_sync
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(alpha = config['alpha'])
-    # optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
-    #optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
-    # 学习率调度器：带 Warmup 的余弦退火
-    lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
-        config['learning_rate'],
-        config['first_decay_steps'],
-        t_mul=2.0,
-        m_mul=0.9,
-        alpha=0.01  # 最小学习率是初始值的 1%
-    )
-    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=config['clipnorm'])
+    model = model_class(max_multiplier=config['max_multiplier'])
+    if config['scheduler'] == 'raw':
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
+        #optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)   
+    elif config['scheduler'] == 'warmup+decay': 
+        # 学习率调度器：带 Warmup 的余弦退火
+        lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
+            config['learning_rate'],
+            config['first_decay_steps'],
+            t_mul=2.0,
+            m_mul=0.9,
+            alpha=0.01  # 最小学习率是初始值的 1%
+        )
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=config['clipnorm'])
+    else: # 默认值
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
+
     model.compile(
         optimizer=optimizer,loss=None
     )
@@ -158,22 +174,40 @@ with strategy.scope():
 # In[10]:
 
 
-# 加载检查点
+# # 加载检查点
+# checkpoint_dir = os.path.join(config['model_path'], 'checkpoints')
+# latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+
+
+# if latest_checkpoint:
+#     print(f"从最新检查点恢复: {latest_checkpoint}")
+#     model.load_weights(latest_checkpoint)
+        
+# elif config['last_model_path']:
+#     warmup_dir = os.path.join(config['last_model_path'], 'checkpoints')
+#     warmup_checkpoint = tf.train.latest_checkpoint(warmup_dir)
+#     if warmup_checkpoint:
+#         print(f"从上一个模型检查点热启动: {warmup_checkpoint}")
+#         model.load_weights(warmup_checkpoint)
+
+
+# ==================== 每次都从头开始：删除旧模型目录，禁止从检查点恢复 ====================
+if os.path.exists(config['model_path']):
+    print(f"[Reset] 删除已有模型目录: {config['model_path']}")
+    shutil.rmtree(config['model_path'])
+
+# 重建必要目录
+os.makedirs(config['model_path'], exist_ok=True)
+
 checkpoint_dir = os.path.join(config['model_path'], 'checkpoints')
-latest_checkpoint = tf.train.latest_checkpoint(checkpoint_dir)
+os.makedirs(checkpoint_dir, exist_ok=True)
+
+log_dir = os.path.join(config['model_path'], 'logs')
+os.makedirs(log_dir, exist_ok=True)
+
+print("[Reset] 已清空并重建输出目录，将从随机初始化开始训练（不恢复任何 checkpoint）。")
 
 
-if latest_checkpoint:
-    print(f"从最新检查点恢复: {latest_checkpoint}")
-    model.load_weights(latest_checkpoint)
-        
-elif config['last_model_path']:
-    warmup_dir = os.path.join(config['last_model_path'], 'checkpoints')
-    warmup_checkpoint = tf.train.latest_checkpoint(warmup_dir)
-    if warmup_checkpoint:
-        print(f"从上一个模型检查点热启动: {warmup_checkpoint}")
-        model.load_weights(warmup_checkpoint)
-        
 # 添加自定义回调
 epoch_metrics_callback = EpochMetricsCallback(log_dir=os.path.join(config['model_path'], 'logs'))
 callbacks = [

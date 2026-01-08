@@ -24,7 +24,7 @@ result-4ifdl/
 result-3erl-tau=1.2/
 result-till-1226
 
-log/
+test/
 
 nohup.out
 fcd_output.log
