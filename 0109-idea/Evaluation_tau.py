@@ -168,42 +168,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # tau 100
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=5e3_max=100",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=100_max=100",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=10_max=100",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_clip=5e3_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_clip=100_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_clip=10_log1p_max=1",
 
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=5e3_max=100",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=100_max=100",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=10_max=100",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_CD_clip=5e3_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_CD_clip=100_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr4_CD_clip=10_log1p_max=1",
 
-    # # tau 10
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr3_clip=10_max=10",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_clip=5e3_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_clip=100_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_clip=10_log1p_max=1",
 
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_tau_2pll_2pos_lr4_clip=10_max=10",
-
-    # # rplusc 10
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_CD_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_CD_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_CD_clip=10_max=10",
-
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_CD_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_CD_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_CD_clip=10_max=10",
-
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr3_clip=10_max=10",
-
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_clip=5e3_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_clip=100_max=10",
-    "./model/EcomDFCL_regretNet_rplusc_2pll_2pos_lr4_clip=10_max=10",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_CD_clip=5e3_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_CD_clip=100_log1p_max=1",
+    "./model/EcomDFCL_regretNet_tau_2pos_lr3_CD_clip=10_log1p_max=1",
 ]
 model_paths_else = [
+
 ]
 
 
@@ -1162,14 +1144,14 @@ json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
 ""
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
 
 
 # In[22]:

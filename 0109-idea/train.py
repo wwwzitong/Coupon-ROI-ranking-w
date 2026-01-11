@@ -10,7 +10,6 @@ import argparse
 import random
 import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rc import EcomDFCL_regretNet_rc, DENSE_FEATURE_NAME
 from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
 from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
@@ -84,7 +83,6 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 config = {
     'model_class_name': 'EcomDFCL_regretNet_rc',
     'model_path': './model/EcomDFCL_regretNet_rc_2pll_2pos_lr3',
-    'loss_function': '2pll',  # 3erl, 4ifdl
     'last_model_path': '',
     'train_data': '../data/criteo_train.csv', 
     'val_data': '../data/criteo_val.csv',
@@ -94,8 +92,9 @@ config = {
     'summary_steps': 1000,
     'first_decay_steps': 1000,
     'clipnorm': 5e3,
-    # 'alpha': 0.1,
-    # 'tau': 1.2,
+    'max_multiplier': 1.0,
+    'scheduler': 'raw',
+    'tau': 1.0,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -104,13 +103,12 @@ parser.add_argument('--model_class_name', type=str, default=config['model_class_
                     help='The name of the model class to train.')
 parser.add_argument('--model_path', type=str, default=config['model_path'],
                     help='The path to save the model and logs.')
-parser.add_argument('--loss_function', type=str, default=config['loss_function'],
-                    help='The expression of decision loss function.')
-# parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-# parser.add_argument('--tau', type=float, default=1.2, help='temprature tau')
+parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
+parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
+parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
 
 
 args = parser.parse_args()
@@ -118,23 +116,22 @@ args = parser.parse_args()
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
-config['loss_function'] = args.loss_function
-# config['alpha'] = args.alpha
 config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
-# config['tau'] = args.tau
-
+config['tau'] = args.tau
+config['max_multiplier'] = args.max_multiplier
+config['scheduler'] = args.scheduler
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
-print(f"Decision Loss Function: {config['loss_function']}")
-# print(f"Alpha: {config['alpha']}")
-# print(f"tau(3erl): {config['tau']}")
+print(f"tau: {config['tau']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
+print(f"scheduler: {config['scheduler']}")
+print(f"max_multiplier: {config['max_multiplier']}")
 print("--------------------")
 
 # In[9]:
@@ -296,20 +293,24 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    # model = model_class()
-    # 将 alpha 传入模型构造函数
-    model = model_class(loss_function=config['loss_function'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
-    # optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
-    # optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)    
-    # 学习率调度器：带 Warmup 的余弦退火
-    lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
-        config['learning_rate'],
-        config['first_decay_steps'],
-        t_mul=2.0,
-        m_mul=0.9,
-        alpha=0.01  # 最小学习率是初始值的 1%
-    )
-    optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=5e3)
+    model = model_class(tau=config['tau'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    
+    if config['scheduler'] == 'raw':
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
+        #optimizer = tfa.optimizers.AdamW(learning_rate=config['learning_rate'], weight_decay=1e-4, clipnorm=5e3)   
+    elif config['scheduler'] == 'warmup+decay': 
+        # 学习率调度器：带 Warmup 的余弦退火
+        lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
+            config['learning_rate'],
+            config['first_decay_steps'],
+            t_mul=2.0,
+            m_mul=0.9,
+            alpha=0.01  # 最小学习率是初始值的 1%
+        )
+        optimizer = tf.keras.optimizers.Adam(learning_rate=lr_schedule, clipnorm=config['clipnorm'])
+    else: # 默认值
+        optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
+
     model.compile(
         optimizer=optimizer,loss=None
     )
