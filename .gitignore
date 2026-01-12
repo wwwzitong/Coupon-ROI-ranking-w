@@ -15,6 +15,7 @@ model/
 model_new_nnmodel/
 model_3erl_tau/
 # best_models/
+model_old/
 
 result/
 result_new_nnmodel/
@@ -23,6 +24,8 @@ result-3erl/
 result-4ifdl/
 result-3erl-tau=1.2/
 result-till-1226
+result_WCE/
+result_MSE_old
 
 test/
 

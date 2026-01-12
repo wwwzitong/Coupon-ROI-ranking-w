@@ -162,27 +162,28 @@ eval_samples = eval_samples.map(
     num_parallel_calls=4
 ).prefetch(1)
 
-
 # In[6]:
 
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=5e3_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=100_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=10_log1p_max=1_tau=2.5",
+    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=10_log1p_max=1_tau=1.0_mse_run1",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=5e3_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=100_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_clip=10_log1p_max=1_tau=1.0_mse",
 
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=5e3_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=100_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=10_log1p_max=1_tau=2.5",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=5e3_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=100_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr4_CD_clip=10_log1p_max=1_tau=1.0_mse",
 
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=5e3_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=100_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=10_log1p_max=1_tau=2.5",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=5e3_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=100_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_clip=10_log1p_max=1_tau=1.0_mse",
 
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=5e3_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=100_log1p_max=1_tau=2.5",
-    "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=10_log1p_max=1_tau=2.5",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=5e3_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=100_log1p_max=1_tau=1.0_mse",
+    # "./model/EcomDFCL_regretNet_rplusc_2pos_lr3_CD_clip=10_log1p_max=1_tau=1.0_mse",
+    
 ]
 model_paths_else = [
 
