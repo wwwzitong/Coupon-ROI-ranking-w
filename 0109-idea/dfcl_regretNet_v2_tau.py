@@ -191,48 +191,41 @@ class EcomDFCL_regretNet_tau(tf.keras.Model):
         return predictions
 
     def compute_local_losses(self, predictions, labels):
-        # batch size
-        treatment_idx = tf.cast(labels['treatment'], tf.int32)
-        B = tf.shape(treatment_idx)[0]
-
         paid_loss = tf.constant(0.0, dtype=tf.float32)
         cost_loss = tf.constant(0.0, dtype=tf.float32)
 
+        # 预先计算 treatment_mask（只一次）
+        treatment_idx = tf.cast(labels['treatment'], tf.int32)
+
         for target_name in self.targets:
-            pos_weight = self.paid_pos_weight if target_name == 'paid' else self.cost_pos_weight
-
-            # 用向量累加：每个样本一个 loss（最终只会在 factual treatment 上非 0）
-            per_sample_loss = tf.zeros([B], dtype=tf.float32)
-
-            # label 是每个样本一个值（0/1）
-            label = tf.cast(labels[target_name], tf.float32)  # [B]
-            sample_weights = tf.where(label > 0, pos_weight, 1.0)  # [B]
-
+            if target_name == 'paid':
+                pos_weight = self.paid_pos_weight
+            else:
+                pos_weight = self.cost_pos_weight
+            local_loss = tf.constant(0.0, dtype=tf.float32)
+            loss_tensor = tf.constant(0.0, dtype=tf.float32)
             for treatment in self.treatment_order:
                 pred_name = f"{target_name}_treatment_{treatment}"
-                logit = predictions[pred_name]  # [B]
+                logit = predictions[pred_name]
 
                 out = tf.minimum(logit, 10.0)
+                label = tf.cast(labels[target_name], tf.float32) 
 
-                # 原始 loss 计算方式不变
                 term1 = -label * out
                 term2 = (1 + label) * (tf.maximum(out, 0) + tf.math.log(1 + tf.exp(-tf.abs(out))))
-                loss_per_sample = term1 + term2  # [B]
+                loss_per_sample = term1 + term2
 
-                treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)  # [B]
+                treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)
 
-                weighted_loss_per_sample = loss_per_sample * sample_weights  # [B]
-                masked_loss = weighted_loss_per_sample * treatment_mask      # [B]
-
-                per_sample_loss += masked_loss  # 累加后只保留 factual treatment 的那一项
-
-            # ✅ 改动点：loss 的平方再对 batch 求平均
-            target_loss = tf.reduce_sum(tf.square(per_sample_loss))
+                sample_weights = tf.where(label > 0, pos_weight, 1.0)
+                weighted_loss_per_sample = loss_per_sample * sample_weights
+                masked_loss = weighted_loss_per_sample * treatment_mask
+                local_loss += tf.reduce_sum(masked_loss)
 
             if target_name == 'paid':
-                paid_loss = target_loss
+                paid_loss += local_loss
             else:
-                cost_loss = target_loss
+                cost_loss += local_loss
 
         return paid_loss, cost_loss
 
