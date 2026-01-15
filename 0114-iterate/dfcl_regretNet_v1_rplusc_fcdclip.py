@@ -159,6 +159,9 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             else:
                 fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
 
+            # ===== 新增：标准化后进行裁剪，避免值域过度集中/数值极端 =====
+            fcd = tf.clip_by_value(fcd, -5.0, 5.0)
+
             dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
             
             # fcd变换之后记录数据分布

@@ -21,7 +21,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, dense_stats_alpha=0.80, update_dense_stats=True, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight=95.30/(100-95.30)
@@ -40,28 +40,38 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self.sparse_feature_slot_map = SPARSE_FEATURE_NAME_SLOT_ID
         self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
 
-        # ===== 新增 =====
+        # ===== 特征标准化统计量（支持在线更新） =====
         # dense_stats 期望格式：
         # {
         #   "raw":   {"mean": [..], "std": [..]},
         #   "log1p": {"mean": [..], "std": [..]}
         # }
+        # 如果 update_dense_stats=True，则训练过程中会用滑动平均在线更新均值/方差：
+        #   new_mean = alpha * old_mean + (1 - alpha) * batch_mean
+        #   new_var  = alpha * old_var  + (1 - alpha) * batch_var
         self.fcd_mode = fcd_mode
-        self._dense_global_mean = None  # shape: [num_dense]
-        self._dense_global_std = None   # shape: [num_dense]
+        self.dense_stats_alpha = tf.constant(float(dense_stats_alpha), dtype=tf.float32)
+        self.update_dense_stats = bool(update_dense_stats)
+
+        num_dense = len(DENSE_FEATURE_NAME)
+        # 初始化 running mean/var
         if dense_stats is not None:
             stats_obj = dense_stats.get(self.fcd_mode, dense_stats)
             mean_list = stats_obj.get("mean")
             std_list = stats_obj.get("std")
             if mean_list is None or std_list is None:
                 raise ValueError(f"dense_stats 缺少 mean/std: keys={list(stats_obj.keys())}")
+            init_mean = tf.convert_to_tensor(mean_list, dtype=tf.float32)
+            init_std = tf.convert_to_tensor(std_list, dtype=tf.float32)
+            init_var = tf.square(init_std)
+        else:
+            init_mean = tf.zeros([num_dense], dtype=tf.float32)
+            init_var = tf.ones([num_dense], dtype=tf.float32)
 
-            mean = tf.convert_to_tensor(mean_list, dtype=tf.float32)
-            std = tf.convert_to_tensor(std_list, dtype=tf.float32)
-
-            self._dense_global_mean = mean
-            self._dense_global_std = std
-        # ===== 新增结束 =====
+        # 使用 non-trainable Variable，确保不会被 optimizer 更新
+        self._dense_running_mean = tf.Variable(init_mean, trainable=False, name='dense_running_mean')
+        self._dense_running_var = tf.Variable(init_var, trainable=False, name='dense_running_var')
+        # ===== 统计量结束 =====
 
         # 模型超参数 TODO：需要依据实际数据集进行修改
         self.sparse_feature_dim = 8 # TODO：简化为4
@@ -132,41 +142,66 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         # 特征处理
         sparse_vectors = []
         dense_vectors = []
-        # ======= 修改开始 =======
-        # for feature_name in self.dense_feature_names:
-        #     fcd = inputs[feature_name]
-        #     fcd = tf.math.log1p(tf.maximum(fcd,0.0))
-        #     fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
-        #     dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
-        for i, feature_name in enumerate(self.dense_feature_names):
-            # fcd变换之前记录数据分布
-            raw_val = inputs[feature_name]
-            if training:
-                if not hasattr(self, "_last_raw_inputs"):
-                    self._last_raw_inputs = {}
-                # 保存原始分布 (展平以便计算统计量)
-                self._last_raw_inputs[feature_name] = tf.reshape(raw_val, [-1])
+        # ================= 在线更新 dense_stats（滑动平均） =================
+        # 1) 取出 dense 输入并做 fcd_mode 变换
+        raw_dense = tf.stack(
+            [tf.cast(inputs[name], tf.float32) for name in self.dense_feature_names],
+            axis=1
+        )  # [B, d]
+        raw_dense = tf.maximum(raw_dense, 0.0)
+        if self.fcd_mode == 'log1p':
+            dense = tf.math.log1p(raw_dense)
+        else:
+            dense = raw_dense
 
-            fcd = tf.cast(inputs[feature_name], tf.float32)
-            fcd = tf.maximum(fcd, 0.0)
-            if self.fcd_mode == 'log1p':
-                fcd = tf.math.log1p(fcd)
-            
-            if self._dense_global_mean is not None and self._dense_global_std is not None:
-                mean = self._dense_global_mean[i]
-                std = self._dense_global_std[i]
-                fcd = (fcd - mean) / (std + 1e-8)
+        # 2) 训练阶段：用全局（跨 replica）batch 统计量在线更新 running mean/var
+        if training and self.update_dense_stats:
+            bsz = tf.cast(tf.shape(dense)[0], tf.float32)  # local batch size
+            local_sum = tf.reduce_sum(dense, axis=0)        # [d]
+            local_sumsq = tf.reduce_sum(tf.square(dense), axis=0)  # [d]
+
+            replica_ctx = tf.distribute.get_replica_context()
+            if replica_ctx is not None:
+                # 跨 worker/replica 做 all-reduce，得到全局 batch 的 sum/sumsq/count
+                total_sum = replica_ctx.all_reduce(tf.distribute.ReduceOp.SUM, local_sum)
+                total_sumsq = replica_ctx.all_reduce(tf.distribute.ReduceOp.SUM, local_sumsq)
+                total_bsz = replica_ctx.all_reduce(tf.distribute.ReduceOp.SUM, bsz)
             else:
-                fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
+                total_sum, total_sumsq, total_bsz = local_sum, local_sumsq, bsz
 
-            dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
-            
-            # fcd变换之后记录数据分布
-            if training:
-                if not hasattr(self, "_last_fcd"):
-                    self._last_fcd = {}
-                self._last_fcd[feature_name] = tf.reshape(fcd, [-1])  # 展平成一维便于 histogram
-        # ======= 修改结束 =======
+            total_bsz = tf.maximum(total_bsz, 1.0)
+            batch_mean = total_sum / total_bsz
+            batch_var = total_sumsq / total_bsz - tf.square(batch_mean)
+            batch_var = tf.maximum(batch_var, 0.0)
+
+            alpha = self.dense_stats_alpha
+            new_mean = alpha * self._dense_running_mean + (1.0 - alpha) * batch_mean
+            new_var = alpha * self._dense_running_var + (1.0 - alpha) * batch_var
+            # 防止方差塌陷到 0
+            new_var = tf.maximum(new_var, 1e-6)
+
+            self._dense_running_mean.assign(new_mean)
+            self._dense_running_var.assign(new_var)
+
+        # 3) 使用 running mean/var 做标准化
+        dense = (dense - self._dense_running_mean) / (tf.sqrt(self._dense_running_var) + 1e-8)
+
+        # 4) 拆分成 [B,1] 的 list，保持原来的 concat 逻辑不变
+        dense_vectors = tf.split(dense, num_or_size_splits=len(self.dense_feature_names), axis=1)
+
+        # ================= 写入 TensorBoard 监控分布（与原逻辑一致） =================
+        if training:
+            # raw 分布（变换前）
+            if not hasattr(self, "_last_raw_inputs"):
+                self._last_raw_inputs = {}
+            for i, fname in enumerate(self.dense_feature_names):
+                self._last_raw_inputs[fname] = tf.reshape(raw_dense[:, i], [-1])
+
+            # fcd 分布（变换+标准化后）
+            if not hasattr(self, "_last_fcd"):
+                self._last_fcd = {}
+            for i, fname in enumerate(self.dense_feature_names):
+                self._last_fcd[fname] = tf.reshape(dense[:, i], [-1])
 
         concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
         

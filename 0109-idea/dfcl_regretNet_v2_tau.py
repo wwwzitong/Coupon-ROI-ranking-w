@@ -67,7 +67,7 @@ class EcomDFCL_regretNet_tau(tf.keras.Model):
         self.sparse_feature_dim = 8 # TODO：简化为4
         self.dense_feature_dim = 1
         self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
-        self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
+        self.ratios = [i / 100.0 for i in range(5, 85, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
         self.targets = ['paid', 'cost']
         
         self.total_samples = statistical_config['N']
@@ -301,7 +301,7 @@ class EcomDFCL_regretNet_tau(tf.keras.Model):
         for ratio in self.ratios:
             value = uplift_r - ratio * uplift_c
             # 应用 LeakyReLU 并计算批次上的平均值
-            loss_for_ratio = tf.reduce_sum(tf.nn.leaky_relu(value, alpha=0.01))
+            loss_for_ratio = tf.reduce_sum(tf.nn.leaky_relu(value))
             decision_loss_sum += loss_for_ratio
             
         # 对所有 ratio 的结果取平均，以近似对 lambda 的积分

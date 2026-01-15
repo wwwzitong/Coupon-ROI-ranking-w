@@ -167,22 +167,22 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
+    "./model/EcomDFCL_regretNet_rplusc_lr4_clip=5e3_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr4_clip=100_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr4_clip=10_log1p_max=1_tau=2.5_fcdclip",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=5e3_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=100_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=10_log1p_max=1_tau=0.8_sum",
+    "./model/EcomDFCL_regretNet_rplusc_lr3_clip=5e3_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr3_clip=100_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr3_clip=10_log1p_max=1_tau=2.5_fcdclip",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=5e3_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=100_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=10_log1p_max=1_tau=0.8_sum",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=5e3_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=100_log1p_max=1_tau=0.8_sum",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=10_log1p_max=1_tau=0.8_sum",
+    "./model/EcomDFCL_regretNet_rplusc_lr5e-5_clip=5e3_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr5e-5_clip=100_log1p_max=1_tau=2.5_fcdclip",
+    "./model/EcomDFCL_regretNet_rplusc_lr5e-5_clip=10_log1p_max=1_tau=2.5_fcdclip",
     
 ]
 model_paths_else = [
 
+    
 
 ]
 

@@ -21,7 +21,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.01, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight=95.30/(100-95.30)
@@ -377,7 +377,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             lambda_term = tf.stop_gradient(self.mu) * prediction_loss
 
             # 二次惩罚项: (ρ/2) * g(w)
-            penalty_term = (self.rho / 2.0) * prediction_loss
+            penalty_term = (self.rho / 2.0) * prediction_loss ** 2
 
             # 最终用于更新模型参数 w 的总损失
             model_update_loss = -decision_loss + lambda_term + penalty_term
