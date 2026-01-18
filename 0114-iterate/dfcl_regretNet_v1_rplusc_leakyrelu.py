@@ -15,47 +15,6 @@ statistical_config={
     'N0':1677550
 }
 
-# ===================== 新增：动态调整dropout ===========================
-dropout_rate = tf.keras.backend.variable(value=0.3, name="dropout_rate")
-
-# ===== 新增：动态 Dropout Callback（最小改动版，按 epoch 调一次）=====
-class DropoutScheduler(tf.keras.callbacks.Callback):
-    def __init__(self, rate_var, start=0.3, end=0.1, warm_epochs=5):
-        super().__init__()
-        self.rate_var = rate_var
-        self.start = float(start)
-        self.end = float(end)
-        self.warm_epochs = int(warm_epochs)
-
-    def on_epoch_begin(self, epoch, logs=None):
-        # 示例策略：前 warm_epochs 个 epoch 用 start，之后固定为 end
-        new_rate = self.start if epoch < self.warm_epochs else self.end
-        tf.keras.backend.set_value(self.rate_var, new_rate)
-        print(f"[DropoutScheduler] epoch={epoch+1}, dropout_rate={tf.keras.backend.get_value(self.rate_var):.4f}")
-
-# ===== 新增：全局可动态调整的 Dropout 概率（默认 0.3）=====
-dropout_rate = tf.keras.backend.variable(value=0.3, name="dropout_rate")
-
-class DynamicDropout(tf.keras.layers.Layer):
-    """最小改动版：rate 由 backend variable 控制，训练中可 set_value 动态改"""
-    def __init__(self, rate_var, **kwargs):
-        super().__init__(**kwargs)
-        self.rate_var = rate_var
-
-    def call(self, x, training=None):
-        if training is None:
-            training = tf.keras.backend.learning_phase()
-
-        def dropped():
-            r = tf.clip_by_value(tf.cast(self.rate_var, tf.float32), 0.0, 0.999)
-            return tf.nn.dropout(x, rate=r)
-
-        if isinstance(training, bool):
-            return dropped() if training else x
-
-        return tf.cond(tf.cast(training, tf.bool), dropped, lambda: x)
-
-
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
@@ -122,15 +81,13 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         
         # 网络结构，user_tower为共享底层
         self.user_tower = tf.keras.Sequential([
-            tf.keras.layers.Dense(512, activation='relu', kernel_initializer='glorot_normal'), # 512->128
+            tf.keras.layers.Dense(512, activation=tf.nn.leaky_relu, kernel_initializer='glorot_normal'), # 512->128
             tf.keras.layers.BatchNormalization(),
-            # tf.keras.layers.Dropout(0.3),
-            DynamicDropout(dropout_rate),
-            tf.keras.layers.Dense(256, activation='relu', kernel_initializer='glorot_normal'),# 256->64
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(256, activation=tf.nn.leaky_relu, kernel_initializer='glorot_normal'),# 256->64
             tf.keras.layers.BatchNormalization(),
-            # tf.keras.layers.Dropout(0.3),
-            DynamicDropout(dropout_rate),
-            tf.keras.layers.Dense(128, activation='relu', kernel_initializer='glorot_normal')# 128->32
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(128, activation=tf.nn.leaky_relu, kernel_initializer='glorot_normal')# 128->32
         ], name='user_tower')
         
         # =======9-5Additional，为了能够保存中间activation=========
@@ -147,7 +104,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             for treatment in self.treatment_order:
                 name = "{}_treatment_{}_tower".format(target, treatment)
                 self.task_towers[name] = tf.keras.Sequential([
-                    tf.keras.layers.Dense(dims, activation='relu', kernel_initializer='glorot_normal') for dims in tower_dims[:-1]
+                    tf.keras.layers.Dense(dims, activation=tf.nn.leaky_relu, kernel_initializer='glorot_normal') for dims in tower_dims[:-1]
                 ] + [
                     tf.keras.layers.Dense(tower_dims[-1], kernel_initializer='glorot_normal')
                 ], name=name)

@@ -15,18 +15,35 @@ statistical_config={
     'N0':1677550
 }
 
+# ===== 新增：全局可动态调整的 Dropout 概率（默认 0.3）=====
+class DynamicDropout(tf.keras.layers.Layer):
+    """Dropout rate 由 tf.Variable 控制，可在训练过程中动态调整。"""
+    def __init__(self, rate_var: tf.Variable, **kwargs):
+        super().__init__(**kwargs)
+        self.rate_var = rate_var
+
+    def call(self, inputs, training=None):
+        if training:
+            rate = tf.clip_by_value(tf.cast(self.rate_var, tf.float32), 0.0, 0.999)
+            return tf.nn.dropout(inputs, rate=rate)
+        return inputs
+
+
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.01, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight=95.30/(100-95.30)
         self.mse = False
-        
+
+        # ===== 新增：动态 Dropout 概率变量 =====
+        self.dropout_rate = tf.Variable(0.3, trainable=False, dtype=tf.float32, name="dropout_rate")
+
         # --- 增广拉格朗日方法超参数 ---
         self.rho = rho  # 二次惩罚项的系数 ρ
         self.lambda_update_frequency = lambda_update_frequency # 拉格朗日乘子 λ 的更新频率 Q
@@ -83,10 +100,12 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self.user_tower = tf.keras.Sequential([
             tf.keras.layers.Dense(512, activation='relu', kernel_initializer='glorot_normal'), # 512->128
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.3),
+            # tf.keras.layers.Dropout(0.3),
+            DynamicDropout(self.dropout_rate),
             tf.keras.layers.Dense(256, activation='relu', kernel_initializer='glorot_normal'),# 256->64
             tf.keras.layers.BatchNormalization(),
-            tf.keras.layers.Dropout(0.3),
+            # tf.keras.layers.Dropout(0.3),
+            DynamicDropout(self.dropout_rate),
             tf.keras.layers.Dense(128, activation='relu', kernel_initializer='glorot_normal')# 128->32
         ], name='user_tower')
         
@@ -220,7 +239,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
                 sample_weights = tf.where(label > 0, pos_weight, 1.0)
                 weighted_loss_per_sample = loss_per_sample * sample_weights
                 masked_loss = weighted_loss_per_sample * treatment_mask
-                local_loss += tf.reduce_mean(masked_loss)
+                local_loss += tf.reduce_sum(masked_loss)
 
             if target_name == 'paid':
                 paid_loss += local_loss
@@ -305,7 +324,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
             ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_mean(softmax_tensor * mask_tensor * ratio_target)
+            decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target)
 
             decision_loss_sum += decision_loss
             
@@ -377,7 +396,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             lambda_term = tf.stop_gradient(self.mu) * prediction_loss
 
             # 二次惩罚项: (ρ/2) * g(w)
-            penalty_term = (self.rho / 2.0) * prediction_loss ** 2
+            penalty_term = (self.rho / 2.0) * prediction_loss
 
             # 最终用于更新模型参数 w 的总损失
             model_update_loss = -decision_loss + lambda_term + penalty_term

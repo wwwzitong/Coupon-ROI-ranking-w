@@ -1,9 +1,9 @@
 
 @REM v1_rplusc
 @REM lr4
-call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=5e3_log1p_max=1_tau=0.8_sum
-call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=100_log1p_max=1_tau=0.8_sum
-call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 10 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=10_log1p_max=1_tau=0.8_sum
+@REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=5e3_log1p_max=1_tau=0.8_sum
+@REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=100_log1p_max=1_tau=0.8_sum
+@REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 0.0001 --clipnorm 10 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=10_log1p_max=1_tau=0.8_sum
 
 
 @REM lr3
@@ -18,5 +18,13 @@ call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fc
 @REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 5e-5 --clipnorm 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=100_log1p_max=1_tau=0.8_sum
 @REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.8 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 5e-5 --clipnorm 10 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=10_log1p_max=1_tau=0.8_sum
 
+@REM lr1e-5
 
-@REM call python Evaluation.py
+@REM test
+@REM call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 5e-5 --clipnorm 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=100_log1p_max=1_tau=1.0_sum_run1
+
+call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 1e-5 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=5e3_log1p_max=1_tau=1.0_sum
+call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 1e-5 --clipnorm 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=100_log1p_max=1_tau=1.0_sum
+call python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --fcd_mode log1p --max_multiplier 1.0 --scheduler raw --lr 1e-5 --clipnorm 10 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=10_log1p_max=1_tau=1.0_sum
+
+call python Evaluation.py

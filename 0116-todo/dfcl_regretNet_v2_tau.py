@@ -15,23 +15,23 @@ statistical_config={
     'N0':1677550
 }
 
-class EcomDFCL_regretNet_rplusc(tf.keras.Model):
+class EcomDFCL_regretNet_tau(tf.keras.Model):
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.01, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.01, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=30, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
-        self.paid_pos_weight = 99.71/(100-99.71)
-        self.cost_pos_weight=95.30/(100-95.30)
         self.mse = False
+        self.paid_pos_weight = 99.71/(100-99.71)
+        self.cost_pos_weight= 95.30/(100-95.30)
         
         # --- 增广拉格朗日方法超参数 ---
         self.rho = rho  # 二次惩罚项的系数 ρ
+        self.rho_lambda = rho # 将乘子的更新和二次惩罚项分开 例如1e-4/1e-3
         self.lambda_update_frequency = lambda_update_frequency # 拉格朗日乘子 λ 的更新频率 Q
         self.max_multiplier = max_multiplier
-        self.tau = tau
         self.mu = tf.Variable(0.0, trainable=False, name='lagrange_multiplier_mu')
         
         # 从 fsfc.py 导入配置
@@ -160,7 +160,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
                 fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
 
             dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
-            
+
             # fcd变换之后记录数据分布
             if training:
                 if not hasattr(self, "_last_fcd"):
@@ -220,7 +220,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
                 sample_weights = tf.where(label > 0, pos_weight, 1.0)
                 weighted_loss_per_sample = loss_per_sample * sample_weights
                 masked_loss = weighted_loss_per_sample * treatment_mask
-                local_loss += tf.reduce_mean(masked_loss)
+                local_loss += tf.reduce_sum(masked_loss)
 
             if target_name == 'paid':
                 paid_loss += local_loss
@@ -280,39 +280,34 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         mse_c = tf.reduce_mean(tf.square(c_factual - y_c))
         return mse_r, mse_c
 
-    def decision_learning_objective_term(self, predictions, labels): # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
-        decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
-        # 预先计算 treatment_mask（仅一次）
-        treatment_idx = tf.cast(labels['treatment'], tf.int32)
 
+    def tau_LeakyReLU_decision_loss(self, predictions, labels):
+        """
+        根据以下公式计算决策损失：
+        C = mean_{lambda} [ mean_i [ LeakyReLU( (r_1 - r_0) - lambda * (c_1 - c_0) ) ] ]
+        其中 r 是 paid，c 是 cost，mean_i 是在批次上的平均值。
+        这个损失函数鼓励 uplift_r > lambda * uplift_c。
+        在训练步骤中，我们会最大化这个损失。
+        """
+        # 'labels' 参数在此损失函数中未使用，但为保持API一致性而保留。
         # pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions.items()}
         # pred_dict = {key: tf.minimum(logit, 10.0) for key, logit in predictions.items()}
         pred_dict = {key: tf.minimum(tf.nn.sigmoid(logit), 10.0) for key, logit in predictions.items()}
+        
+        decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
+        uplift_r = pred_dict["paid_treatment_1"] - pred_dict["paid_treatment_0"]
+        uplift_c = pred_dict["cost_treatment_1"] - pred_dict["cost_treatment_0"]
 
-        for ratio in self.ratios: # 模拟决策过程
-            cancat_list, mask_list = [], []
-            for treatment in self.treatment_order:
-                v = pred_dict["paid_treatment_{}".format(treatment)] - ratio * pred_dict["cost_treatment_{}".format(treatment)]
-                cancat_list.append(tf.reshape(v, [-1, 1]))
-                
-                treatment_mask = tf.equal(treatment, treatment_idx)
-                mask_list.append(tf.reshape(tf.cast(treatment_mask, tf.float32), [-1, 1]))
-
-            # 应用温度调节的softmax
-            cancat_tensor = tf.concat(cancat_list, axis=1)
-            softmax_tensor = tf.nn.softmax(cancat_tensor / self.tau, axis=1)
+        for ratio in self.ratios:
+            value = uplift_r - ratio * uplift_c
+            # 应用 LeakyReLU 并计算批次上的平均值
+            loss_for_ratio = tf.reduce_sum(tf.nn.leaky_relu(value))
+            decision_loss_sum += loss_for_ratio
             
-            mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
-            ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
-            # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_mean(softmax_tensor * mask_tensor * ratio_target)
-
-            decision_loss_sum += decision_loss
-            
+        # 对所有 ratio 的结果取平均，以近似对 lambda 的积分
         # return decision_loss_sum / len(self.ratios)
         return decision_loss_sum
-
-
+    
     def _add_summaries(self, name, tensor, step):
         """辅助函数，用于在TensorBoard中记录张量的统计信息"""
         tf.summary.scalar(f"{name}/mean", tf.reduce_mean(tensor), step=step)
@@ -354,19 +349,19 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             shared_output = self._last_shared_output
             user_tower_activations = self._last_user_tower_activations
 
-            decision_loss = self.decision_learning_objective_term(predictions, labels)  # maximize
             if self.mse == False:
                 paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
             else:
                 paid_loss, cost_loss = self.factual_mse_constraint(predictions, labels)
+            decision_loss = self.tau_LeakyReLU_decision_loss(predictions, labels)
 
             # 检查数值稳定性
             paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in paid_loss")
             cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in cost_loss")
             decision_loss = tf.debugging.check_numerics(decision_loss, "NaN/Inf in decision_loss")
 
-            # 2. 构建增广拉格朗日函数
-            # L(w, μ) = f(w) + μ * g(w)^2 + (ρ/2) * g(w)^2
+            # 2. 构建增广拉格朗日函数 L(w, μ)
+            # L(w, μ) = f(w) + μ * g(w) + (ρ/2) * g(w)^2
             # f(w) 是主目标: -decision_loss (因为我们要最大化 decision_loss)
             # g(w) 是约束函数: prediction_loss = paid_loss + cost_loss (我们希望它为0)
             # μ 是拉格朗日乘子: self.mu
@@ -382,7 +377,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             # 最终用于更新模型参数 w 的总损失
             model_update_loss = -decision_loss + lambda_term + penalty_term
 
-
         # 3. 计算梯度并更新模型参数 w (Primal Update)
         model_variables = self.trainable_variables
         model_gradients = tape.gradient(model_update_loss, model_variables)
@@ -396,8 +390,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         def update_mu():
             # 更新规则: μ_new = μ_old + ρ * g(w)
             # 使用 tf.stop_gradient 确保此更新操作不会影响 w 的梯度计算
-            # self.mu.assign_add(self.rho * tf.stop_gradient(prediction_loss))
-            new_mu = self.mu + self.rho * tf.stop_gradient(prediction_loss)
+            new_mu = self.mu + self.rho_lambda * tf.stop_gradient(prediction_loss)
             # 将 mu 限制在 [0, 1] 范围内
             self.mu.assign(tf.clip_by_value(new_mu, clip_value_min=0.0, clip_value_max=self.max_multiplier))
             return tf.constant(True)
@@ -444,6 +437,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self._add_summaries("labels/paid", labels['paid'], step=step)
         self._add_summaries("labels/cost", labels['cost'], step=step)
         self._add_summaries("activations/shared_output",  shared_output, step=step)
+
         # 5. 记录监控指标到 TensorBoard
         self._add_summaries("losses/1_paid_loss", paid_loss, step=step)
         self._add_summaries("losses/2_cost_loss", cost_loss, step=step)
@@ -486,12 +480,12 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         # 返回用于 Keras 进度条显示的指标
         return {
             "total_loss": model_update_loss,
-            "decision_loss": decision_loss, # 越大越好
+            "decision_loss": decision_loss,
             "paid_loss": paid_loss,
             "cost_loss": cost_loss,
             "lambda_term": lambda_term,
             "penalty_term": penalty_term,
-            "lagrangian": self.mu,
+            "lagrangian":self.mu
         }
 
     def test_step(self, data):
@@ -503,7 +497,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
         else:
             paid_loss, cost_loss = self.factual_mse_constraint(predictions, labels)
-        decision_loss = self.decision_learning_objective_term(predictions, labels)  # maximize
+        decision_loss = self.tau_LeakyReLU_decision_loss(predictions, labels)
         
         # 在验证集上，我们通常只关心原始损失，不计算增广拉格朗日损失
         model_update_loss = -decision_loss # 可以只看主目标

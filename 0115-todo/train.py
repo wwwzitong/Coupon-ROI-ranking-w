@@ -95,6 +95,7 @@ config = {
     'max_multiplier': 1.0,
     'scheduler': 'raw',
     'tau': 1.0,
+    'rho': 0.01,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -109,6 +110,7 @@ parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
 parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
 parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
+parser.add_argument('--rho', type=float, default=0.01, help='rho for updating mu')
 
 
 args = parser.parse_args()
@@ -120,6 +122,7 @@ config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
 config['tau'] = args.tau
+config['rho'] = args.rho
 config['max_multiplier'] = args.max_multiplier
 config['scheduler'] = args.scheduler
 
@@ -127,6 +130,7 @@ print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"tau: {config['tau']}")
+print(f"rho: {config['rho']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
@@ -293,7 +297,7 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(tau=config['tau'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    model = model_class(tau=config['tau'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     
     if config['scheduler'] == 'raw':
         optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])

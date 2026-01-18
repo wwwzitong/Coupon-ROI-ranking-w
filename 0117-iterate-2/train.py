@@ -10,11 +10,8 @@ import argparse
 import random
 import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-# from dfcl_regretNet_v1_rplusc_dynamic import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v1_rplusc_fcdclip import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v1_rplusc_leakyrelu import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-from dfcl_regretNet_v1_rplusc_res import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),  ".."))
 if CODE_DIR not in sys.path:
@@ -60,29 +57,6 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # In[7]:
 
-class DynamicDropoutCallback(tf.keras.callbacks.Callback):
-    """
-    动态调整 model.dropout_rate：
-    - 初始较低 init_rate
-    - 随 epoch 逐步下降到 final_rate（指数衰减）
-    """
-    def __init__(self, init_rate=0.2, final_rate=0.05, decay=0.95, verbose=1):
-        super().__init__()
-        self.init_rate = float(init_rate)
-        self.final_rate = float(final_rate)
-        self.decay = float(decay)
-        self.verbose = verbose
-
-    def on_epoch_begin(self, epoch, logs=None):
-        # rate = max(final, init * decay^epoch)
-        new_rate = max(self.final_rate, self.init_rate * (self.decay ** epoch))
-
-        # 兼容你图里的“get_value / set_value”思路
-        if hasattr(self.model, "dropout_rate"):
-            tf.keras.backend.set_value(self.model.dropout_rate, new_rate)
-            if self.verbose:
-                cur = tf.keras.backend.get_value(self.model.dropout_rate)
-                print(f"[DynamicDropout] epoch={epoch+1} dropout_rate -> {cur:.6f}")
 
 # ==================== 建议添加的回调 ====================
 class EpochMetricsCallback(tf.keras.callbacks.Callback):
@@ -113,7 +87,7 @@ config = {
     'train_data': '../data/criteo_train.csv', 
     'val_data': '../data/criteo_val.csv',
     'batch_size': 256,
-    'num_epochs': 50,
+    'num_epochs': 70,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
     'first_decay_steps': 1000,
@@ -121,6 +95,7 @@ config = {
     'max_multiplier': 1.0,
     'scheduler': 'raw',
     'tau': 1.0,
+    'rho': 0.1,
 }
 
 # --- 1b. 使用 argparse 解析命令行参数 ---
@@ -135,6 +110,8 @@ parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
 parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
 parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
+parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
+
 
 args = parser.parse_args()
 
@@ -145,6 +122,7 @@ config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
 config['tau'] = args.tau
+config['rho'] = args.rho
 config['max_multiplier'] = args.max_multiplier
 config['scheduler'] = args.scheduler
 
@@ -152,6 +130,7 @@ print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"tau: {config['tau']}")
+print(f"rho: {config['rho']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
@@ -186,7 +165,6 @@ print("[Reset] 已清空并重建输出目录，将从随机初始化开始训�
 
 # 添加自定义回调
 epoch_metrics_callback = EpochMetricsCallback(log_dir=os.path.join(config['model_path'], 'logs'))
-# dynamic_dropout_cb = DynamicDropoutCallback(init_rate=0.2, final_rate=0.05, decay=0.95, verbose=1)
 callbacks = [
     # 修改 ModelCheckpoint 来只保存最佳模型
     tf.keras.callbacks.ModelCheckpoint(
@@ -204,7 +182,6 @@ callbacks = [
         restore_best_weights=True
     ),
     epoch_metrics_callback,
-    # dynamic_dropout_cb,          # ===== 新增 =====
 ]
 
 
@@ -320,7 +297,7 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(tau=config['tau'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats,)
+    model = model_class(tau=config['tau'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     
     if config['scheduler'] == 'raw':
         optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
