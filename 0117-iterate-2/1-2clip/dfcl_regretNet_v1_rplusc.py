@@ -2,7 +2,7 @@ import tensorflow as tf
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 import os
 import sys
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 from data_utils import *

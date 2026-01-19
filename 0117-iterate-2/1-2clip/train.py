@@ -13,7 +13,7 @@ import io
 from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),  ".."))
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 
@@ -84,10 +84,10 @@ config = {
     'model_class_name': 'EcomDFCL_regretNet_rc',
     'model_path': './model/EcomDFCL_regretNet_rc_2pll_2pos_lr3',
     'last_model_path': '',
-    'train_data': '../data/criteo_train.csv', 
-    'val_data': '../data/criteo_val.csv',
+    'train_data': '../../data/criteo_train.csv', 
+    'val_data': '../../data/criteo_val.csv',
     'batch_size': 256,
-    'num_epochs': 70,
+    'num_epochs': 50,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
     'first_decay_steps': 1000,

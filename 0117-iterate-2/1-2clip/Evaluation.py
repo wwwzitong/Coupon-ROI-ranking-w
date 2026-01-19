@@ -23,7 +23,7 @@ from pathlib import Path
 # from fsfc_mine_mx2 import * #自行生成fsfc文件（脚本放在data_flow中）
 # from data_utils_mx2 import *
 
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 from data_utils import *
@@ -115,7 +115,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 
 
 
 config = {
-    'eval_data': '../data/criteo_train.csv',
+    'eval_data': '../../data/criteo_train.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -167,18 +167,25 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=80_log1p_max=1_tau=1.0_rho3_ep70",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=100_log1p_max=1_tau=1.0_rho3_ep60",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=80_log1p_max=1_tau=1.0_rho3_ep60",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=10_log1p_max=1_tau=1.0_rho3_ep60",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=0.8",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=1.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=2.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=2.5",
+
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=0.8",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=1.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=2.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=2.5",
+
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=0.8",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=2.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=2.5",
 ]
 model_paths_else = [
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr2e-5_clip=5e3_log1p_max=1_tau=1.0_ep60",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr2e-5_clip=100_log1p_max=1_tau=1.0_ep60",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr2e-5_clip=80_log1p_max=1_tau=1.0_ep60",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr2e-5_clip=10_log1p_max=1_tau=1.0_ep60",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr1e-5_clip=5e3_log1p_max=1_tau=1.0_rho3_ep60",
 
 ]
 
