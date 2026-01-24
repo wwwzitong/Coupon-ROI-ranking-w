@@ -115,7 +115,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 
 
 
 config = {
-    'eval_data': '../../data/criteo_train.csv',
+    'eval_data': '../../data/criteo_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -167,23 +167,25 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=80_log1p_max=1_tau=2.5",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=80_log1p_max=1_tau=2.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=0.8_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.5_rho2",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=80_log1p_max=1_tau=2.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=0.8_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.5_rho2",
+
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=0.8_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.0_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.5_rho2",
+
 ]
 model_paths_else = [
 

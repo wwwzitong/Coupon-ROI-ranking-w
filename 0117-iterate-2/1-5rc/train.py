@@ -10,7 +10,7 @@ import argparse
 import random
 import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+from dfcl_regretNet_v1_rc import EcomDFCL_regretNet_rc, DENSE_FEATURE_NAME
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -92,7 +92,8 @@ config = {
     'summary_steps': 1000,
     'first_decay_steps': 1000,
     'clipnorm': 5e3,
-    'max_multiplier': 1.0,
+    'max_multiplier_paid': 1.0,
+    'max_multiplier_cost': 1.0,
     'scheduler': 'raw',
     'tau': 1.0,
     'rho': 0.1,
@@ -107,7 +108,8 @@ parser.add_argument('--model_path', type=str, default=config['model_path'],
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
+parser.add_argument('--max_multiplier_paid', type=float, default=1.0, help='max lagrangian multiplier')
+parser.add_argument('--max_multiplier_cost', type=float, default=1.0, help='max lagrangian multiplier')
 parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
 parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
 parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
@@ -123,7 +125,8 @@ config['clipnorm'] = args.clipnorm
 config['learning_rate'] = args.lr
 config['tau'] = args.tau
 config['rho'] = args.rho
-config['max_multiplier'] = args.max_multiplier
+config['max_multiplier_paid'] = args.max_multiplier_paid
+config['max_multiplier_cost'] = args.max_multiplier_cost
 config['scheduler'] = args.scheduler
 
 print("--- 运行配置 ---")
@@ -135,7 +138,8 @@ print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
 print(f"scheduler: {config['scheduler']}")
-print(f"max_multiplier: {config['max_multiplier']}")
+print(f"max_multiplier_paid: {config['max_multiplier_paid']}")
+print(f"max_multiplier_cost: {config['max_multiplier_cost']}")
 print("--------------------")
 
 # In[9]:
@@ -284,16 +288,6 @@ def compute_global_dense_stats(ds, dense_names, clip_min=0.0):
 num_rows = _count_csv_rows(config['train_data'])
 num_batches = int(math.ceil(num_rows / float(global_batch_size)))
 
-# # ===== 自动计算 steps_per_epoch（避免写死 500）=====
-# steps_per_epoch = config.get("steps_per_epoch", None)
-# if steps_per_epoch is None or steps_per_epoch <= 0:
-#     steps_per_epoch = num_batches  # 训练集完整跑一遍
-
-# # （可选）也给验证集算 validation_steps，避免验证集被截断或不完整
-# val_rows = _count_csv_rows(config['val_data'])
-# validation_steps = int(math.ceil(val_rows / float(global_batch_size)))
-
-
 train_for_stats = dataset.prepare_dataset(
     config['train_data'], phase='train', batch_size=global_batch_size, shuffle=False
 ).map(_to_features_labels, num_parallel_calls=4).take(num_batches).prefetch(1)
@@ -307,7 +301,7 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(tau=config['tau'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    model = model_class(tau=config['tau'], rho=config['rho'], max_multiplier_paid=config['max_multiplier_paid'], max_multiplier_cost=config['max_multiplier_cost'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     
     if config['scheduler'] == 'raw':
         optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
@@ -330,7 +324,7 @@ with strategy.scope():
     )
 
 
-model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 1000, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
+model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型
 print(f"训练完成，正在将模型保存到: {config['model_path']}")

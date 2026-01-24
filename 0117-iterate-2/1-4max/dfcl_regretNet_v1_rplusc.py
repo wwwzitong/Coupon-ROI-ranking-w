@@ -203,7 +203,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             else:
                 pos_weight = self.cost_pos_weight
             local_loss = tf.constant(0.0, dtype=tf.float32)
-            loss_tensor = tf.constant(0.0, dtype=tf.float32)
             for treatment in self.treatment_order:
                 pred_name = f"{target_name}_treatment_{treatment}"
                 logit = predictions[pred_name]
@@ -305,12 +304,12 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
             ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_mean(softmax_tensor * mask_tensor * ratio_target)
+            decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target)
 
             decision_loss_sum += decision_loss
             
-        return decision_loss_sum / len(self.ratios)
-        # return decision_loss_sum
+        # return decision_loss_sum / len(self.ratios)
+        return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):

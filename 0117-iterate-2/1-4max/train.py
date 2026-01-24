@@ -284,16 +284,6 @@ def compute_global_dense_stats(ds, dense_names, clip_min=0.0):
 num_rows = _count_csv_rows(config['train_data'])
 num_batches = int(math.ceil(num_rows / float(global_batch_size)))
 
-# # ===== 自动计算 steps_per_epoch（避免写死 500）=====
-# steps_per_epoch = config.get("steps_per_epoch", None)
-# if steps_per_epoch is None or steps_per_epoch <= 0:
-#     steps_per_epoch = num_batches  # 训练集完整跑一遍
-
-# # （可选）也给验证集算 validation_steps，避免验证集被截断或不完整
-# val_rows = _count_csv_rows(config['val_data'])
-# validation_steps = int(math.ceil(val_rows / float(global_batch_size)))
-
-
 train_for_stats = dataset.prepare_dataset(
     config['train_data'], phase='train', batch_size=global_batch_size, shuffle=False
 ).map(_to_features_labels, num_parallel_calls=4).take(num_batches).prefetch(1)
@@ -330,7 +320,7 @@ with strategy.scope():
     )
 
 
-model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 1000, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
+model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型
 print(f"训练完成，正在将模型保存到: {config['model_path']}")
