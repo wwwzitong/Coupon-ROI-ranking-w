@@ -167,42 +167,23 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr4_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr4_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr4_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr4_clip=60_log1p_max=1_tau=2.5_rho4",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.5",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.5",
-
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=0.8_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr4_clip=60_log1p_max=1_tau=2.5_rho2",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=0.8_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr3_clip=60_log1p_max=1_tau=2.5_rho2",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=0.8_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.0_rho2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.5_rho2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr3_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr3_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr3_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr3_clip=60_log1p_max=1_tau=2.5_rho4",
+    
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr5e-5_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_valloss_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.5_rho4",
 
 ]
 model_paths_else = [
@@ -987,11 +968,11 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        print("正在生成 Paid Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        # print("正在生成 Paid Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
-        print("正在生成 Cost Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        # print("正在生成 Cost Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)

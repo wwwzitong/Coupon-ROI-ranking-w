@@ -86,7 +86,7 @@ config = {
     'last_model_path': '',
     'train_data': '../../data/criteo_train.csv', 
     'val_data': '../../data/criteo_val.csv',
-    'batch_size': 256,
+    'batch_size': 4096,
     'num_epochs': 50,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
@@ -111,6 +111,7 @@ parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagra
 parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
 parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
 parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
+parser.add_argument('--bs', type=int, default=4096, help='batchsize')
 
 
 args = parser.parse_args()
@@ -125,16 +126,18 @@ config['tau'] = args.tau
 config['rho'] = args.rho
 config['max_multiplier'] = args.max_multiplier
 config['scheduler'] = args.scheduler
+config['batch_size'] = args.bs
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
+print(f"batch_size: {config['batch_size']}")
 print(f"tau: {config['tau']}")
 print(f"rho: {config['rho']}")
-print(f"FCD Mode: {config['fcd_mode']}")
+# print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
-print(f"scheduler: {config['scheduler']}")
+# print(f"scheduler: {config['scheduler']}")
 print(f"max_multiplier: {config['max_multiplier']}")
 print("--------------------")
 
@@ -330,7 +333,34 @@ with strategy.scope():
     )
 
 
-model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 1000, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
+##### 0125 New #####
+# 1) 更稳的 steps 计算（兼容 drop_remainder）
+num_rows = _count_csv_rows(config['train_data'])
+steps_per_epoch = max(1, num_rows // global_batch_size)
+
+val_rows = _count_csv_rows(config['val_data'])
+validation_steps = max(1, val_rows // global_batch_size)
+
+# 2) 确保不会第二个 epoch “没数据”
+train_samples = train_samples.repeat()
+val_samples = val_samples.repeat()
+
+# 3) 分布式分片策略（可选但推荐）
+options = tf.data.Options()
+options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+train_samples = train_samples.with_options(options)
+val_samples = val_samples.with_options(options)
+
+model.fit(
+    train_samples,
+    validation_data=val_samples,
+    epochs=config['num_epochs'],
+    steps_per_epoch=steps_per_epoch,
+    validation_steps=validation_steps,
+    callbacks=callbacks
+)
+
+# model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = steps_per_epoch, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型
 print(f"训练完成，正在将模型保存到: {config['model_path']}")

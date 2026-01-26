@@ -9,6 +9,7 @@ __pycache__/
 
 # 忽略 environment 配置文件 (对应截图中的 environment.yml)
 environment.yml
+roi-environment-windows.yml
 
 # model、result、log先不上传
 model/
@@ -32,3 +33,4 @@ nohup.out
 fcd_output.log
 
 wrong-0107-todo/
+giveup-0117/

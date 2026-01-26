@@ -167,24 +167,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr4_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr4_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr4_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr4_clip=60_log1p_max=1_tau=2.5_rho4",
 
-
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr3_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr3_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr3_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr3_clip=60_log1p_max=1_tau=2.5_rho4",
     
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr4_clip=60_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr3_clip=60_log1p_max=1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr5e-5_clip=60_log1p_max=1_tau=0.8_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.0_rho4",
+    "./model/EcomDFCL_regretNet_rplusc_wce_step600_2pos_lr5e-5_clip=60_log1p_max=1_tau=2.5_rho4",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho2",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho3",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho3",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho3",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr4_clip=60_log1p_max=1_tau=1.5_rho4",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr3_clip=60_log1p_max=1_tau=1.5_rho4",
-    "./model/EcomDFCL_regretNet_rplusc_wce_step_2pos_lr5e-5_clip=60_log1p_max=1_tau=1.5_rho4",
 ]
 model_paths_else = [
 

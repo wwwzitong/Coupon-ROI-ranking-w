@@ -22,11 +22,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     只参考形式，但还没有完全还原。
     """
     def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
-        # ===== 新增：输入高斯噪声（数据增强） =====
-        self.use_input_noise = kwargs.pop("use_input_noise", True)
-        self.input_noise_std = kwargs.pop("input_noise_std", 0.02)  # 建议 0.01~0.05 之间试
-        # ===== 新增结束 =====
-
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight=95.30/(100-95.30)
@@ -164,11 +159,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             else:
                 fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
 
-            # ===== 新增：仅训练时对 dense 特征加正态噪声（标准化空间） =====
-            if training and self.use_input_noise and self.input_noise_std > 0:
-                fcd = fcd + tf.random.normal(tf.shape(fcd), mean=0.0, stddev=self.input_noise_std, dtype=fcd.dtype)
-            # ===== 新增结束 =====
-            
             dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
             
             # fcd变换之后记录数据分布

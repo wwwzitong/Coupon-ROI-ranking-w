@@ -313,56 +313,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         return decision_loss_sum
 
 
-    def decision_entropy_regularized_loss(self, predictions, labels): # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
-        decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
-        # 预先计算 treatment_mask（仅一次）
-        treatment_idx = tf.cast(labels['treatment'], tf.int32)
-        treatment_masks = {
-            t: tf.cast(tf.equal(treatment_idx, t), tf.float32) for t in self.treatment_order
-        }
-        
-        pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions.items()}
-        # pred_dict = {key: tf.minimum(tf.nn.sigmoid(logit), 10.0) for key, logit in predictions.items()}
-        
-        # --- 修改：使用预设的 N 和 N_ti 计算权重 ---
-        N = self.total_samples
-        counts_per_treatment = {
-            t: float(self.treatment_sample_counts[t]) + 1e-8 for t in self.treatment_order
-        }
-        
-        # 构建权重张量, weight_tensor[i] = N / N_ti for sample i in treatment ti
-        weight_tensor = tf.zeros_like(treatment_idx, dtype=tf.float32)
-        for t in self.treatment_order:
-            weight_for_t = N / counts_per_treatment[t]
-            weight_tensor += treatment_masks[t] * weight_for_t
-        
-        # Reshape for broadcasting
-        weight_tensor = tf.reshape(weight_tensor, [-1, 1])
-
-        for ratio in self.ratios: # 模拟决策过程
-            cancat_list, mask_list = [], []
-            for treatment in self.treatment_order:
-                v = pred_dict["paid_treatment_{}".format(treatment)] - ratio * pred_dict["cost_treatment_{}".format(treatment)]
-                cancat_list.append(tf.reshape(v, [-1, 1]))
-                
-                treatment_idx = tf.cast(labels['treatment'], tf.int32)
-                treatment_mask = tf.equal(treatment, treatment_idx)
-                mask_list.append(tf.reshape(tf.cast(treatment_mask, tf.float32), [-1, 1]))
-
-            # 应用温度调节的softmax
-            cancat_tensor = tf.concat(cancat_list, axis=1)
-            softmax_tensor = tf.nn.softmax(cancat_tensor / self.tau, axis=1)
-            
-            mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
-            ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
-            # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target* weight_tensor)
-            decision_loss_sum += decision_loss
-            
-        # return decision_loss_sum / len(self.ratios)
-        return decision_loss_sum
-
-
     def _add_summaries(self, name, tensor, step):
         """辅助函数，用于在TensorBoard中记录张量的统计信息"""
         tf.summary.scalar(f"{name}/mean", tf.reduce_mean(tensor), step=step)
@@ -413,7 +363,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             shared_output = self._last_shared_output
             user_tower_activations = self._last_user_tower_activations
 
-            decision_loss = self.decision_entropy_regularized_loss(predictions, labels)  # maximize
+            decision_loss = self.decision_learning_objective_term(predictions, labels)  # maximize
             if self.mse == False:
                 paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
             else:
@@ -582,7 +532,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
         else:
             paid_loss, cost_loss = self.factual_mse_constraint(predictions, labels)
-        decision_loss = self.decision_entropy_regularized_loss(predictions, labels)  # maximize
+        decision_loss = self.decision_learning_objective_term(predictions, labels)  # maximize
         
         # 在验证集上，我们通常只关心原始损失，不计算增广拉格朗日损失
         model_update_loss = -decision_loss # 可以只看主目标

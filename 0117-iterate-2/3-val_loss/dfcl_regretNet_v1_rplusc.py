@@ -305,12 +305,12 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
             ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_mean(softmax_tensor * mask_tensor * ratio_target)
+            decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target)
 
             decision_loss_sum += decision_loss
             
-        return decision_loss_sum / len(self.ratios)
-        # return decision_loss_sum
+        # return decision_loss_sum / len(self.ratios)
+        return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):
@@ -534,8 +534,11 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             paid_loss, cost_loss = self.factual_mse_constraint(predictions, labels)
         decision_loss = self.decision_learning_objective_term(predictions, labels)  # maximize
         
+        prediction_loss = paid_loss + cost_loss
+        lambda_term = self.mu * prediction_loss
+
         # 在验证集上，我们通常只关心原始损失，不计算增广拉格朗日损失
-        model_update_loss = -decision_loss # 可以只看主目标
+        model_update_loss = -decision_loss + lambda_term # 可以只看主目标
 
         return {
             "total_loss": model_update_loss,
