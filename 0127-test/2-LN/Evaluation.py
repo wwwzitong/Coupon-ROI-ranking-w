@@ -167,27 +167,7 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr1e-3_clip=100_log1p_max=1_tau=1.0",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr2e-3_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr1e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr5e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr1e-5_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs4096_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.0",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr2e-3_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr1e-3_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr5e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr1e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs2048_2pos_lr1e-5_clip=80_log1p_max=1_tau=1.0",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr1e-3_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr2e-3_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr1e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr5e-4_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr1e-5_clip=80_log1p_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_all_bs1024_2pos_lr5e-5_clip=80_log1p_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_LN_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0",
 
 ]
 model_paths_else = [

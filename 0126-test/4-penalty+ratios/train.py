@@ -1,8 +1,5 @@
 from __future__ import print_function, absolute_import, division
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-
 import sys
 import tensorflow as tf
 import numpy as np
@@ -23,6 +20,8 @@ if CODE_DIR not in sys.path:
 from data_utils import *
 
 import argparse # 导入 argparse 模块
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):

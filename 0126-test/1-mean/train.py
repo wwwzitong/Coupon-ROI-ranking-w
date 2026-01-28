@@ -188,7 +188,24 @@ callbacks = [
     epoch_metrics_callback,
 ]
 
-
+# -------------------- LR Scheduler: ReduceLROnPlateau --------------------
+# 用法：当验证集指标 (默认 val_total_loss) 在若干个 epoch 内不再改善时，自动降低学习率。
+# 注意：ReduceLROnPlateau 只能和“固定学习率”的 optimizer 搭配；
+# 如果 optimizer.learning_rate 是 schedule（如 CosineDecayRestarts），该回调不会生效。
+if config.get('scheduler') in ['ReduceLROnPlateau']:
+    callbacks.append(
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_total_loss',
+            factor=0.5,     # 学习率乘以 0.5
+            patience=3,     # 连续 3 个 epoch 没改善就降
+            verbose=1,
+            mode='min',
+            min_delta=0.0,
+            cooldown=0,
+            min_lr=1e-6,    # 学习率下限
+        )
+    )
+    
 # In[11]:
 
 
