@@ -70,22 +70,12 @@ algo_conf = {
     'dataset': {
         'columns': [
             {
-                'names': ['request_time'],
-                'dtype': 'string',
-                'default_value': ""
-            },
-            {
-                'names': ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'f13', 'f14', 'f15'],
+                'names': ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11'],
                 'dtype': 'float',
                 'default_value': 0.0
             },
             {
-                'names': ['feat1_seq1', 'feat1_seq2', 'feat1_seq3', 'feat1_seq4', 'feat1_seq5', 'feat1_seq6', 'feat1_seq7', 'feat1_seq8', 'feat2_seq1'],
-                'dtype': 'string',
-                'default_value': ""
-            },
-            {
-                'names': ['treatment', 'treatment_detail', 'conversion', 'visit'],
+                'names': ['treatment', 'conversion', 'visit', 'exposure'],
                 'dtype': 'float',
                 'default_value': 0.0
             }
