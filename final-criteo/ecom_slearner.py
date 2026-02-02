@@ -183,7 +183,7 @@ class SLearner(tf.keras.Model): # std+2pos
                 masked_loss = weighted_loss_per_sample * treatment_mask  # 使用加权后的损失
                 
                 # ✅ 累加 sum
-                local_loss += tf.reduce_sum(masked_loss)
+                local_loss += tf.reduce_mean(masked_loss)
 
             if target_name == 'paid':
                 paid_loss += local_loss

@@ -90,7 +90,7 @@ config = {
     'train_data': '../data/criteo_train.csv', 
     'val_data': '../data/criteo_val.csv',
     'batch_size': 4096,
-    'num_epochs': 50,
+    'num_epochs': 2,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
     'first_decay_steps': 1000,

@@ -77,6 +77,7 @@ def _try_solve(prob: cp.Problem, prefer: Optional[str] = None, verbose: bool = F
         try:
             prob.solve(solver=getattr(cp, s), verbose=verbose)
             if prob.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+                print(f"solver: {s}")
                 return
         except Exception as e:
             last_err = e
@@ -270,7 +271,7 @@ class RobustnessSDP:
         return np.asarray(x)
 
     @staticmethod
-    def compute_utilities_from_predictions(
+    def compute_utilities_from_predictions_old(
         preds: Any,
         paid_prefix: str = "paid_treatment_",
         cost_prefix: str = "cost_treatment_",
@@ -321,6 +322,58 @@ class RobustnessSDP:
         return U, common
 
     @staticmethod
+    def compute_utilities_from_predictions(
+        preds: Any,
+        paid_prefix: str = "paid_treatment_",
+        cost_prefix: str = "cost_treatment_",
+        lambda_cost: float = 0.5,
+    ) -> Tuple[np.ndarray, List[int]]:
+        """
+        Binary decision utility:
+        u1 = (paid_1 - paid_0) - lambda * (cost_1 - cost_0)
+        decide treatment=1 if u1 > 0 else 0
+
+        To keep the rest of the pipeline unchanged (argmax & margin),
+        we build U = [u0, u1] with u0 = 0. So argmax(U) matches the threshold rule.
+
+        Expected keys in preds:
+        paid_treatment_0, paid_treatment_1, cost_treatment_0, cost_treatment_1
+
+        Returns:
+        U: shape (B, 2) where columns correspond to treatment_ids [0, 1]
+        treatment_ids: [0, 1]
+        """
+        if not isinstance(preds, dict):
+            raise ValueError("Model output must be a dict for compute_utilities_from_predictions().")
+
+        # Required keys
+        k_p0 = f"{paid_prefix}0"
+        k_p1 = f"{paid_prefix}1"
+        k_c0 = f"{cost_prefix}0"
+        k_c1 = f"{cost_prefix}1"
+
+        missing = [k for k in [k_p0, k_p1, k_c0, k_c1] if k not in preds]
+        if missing:
+            raise ValueError(
+                "Missing required prediction keys for incremental decision: " + ", ".join(missing)
+            )
+
+        paid0 = RobustnessSDP._to_numpy(preds[k_p0]).reshape(-1)
+        paid1 = RobustnessSDP._to_numpy(preds[k_p1]).reshape(-1)
+        cost0 = RobustnessSDP._to_numpy(preds[k_c0]).reshape(-1)
+        cost1 = RobustnessSDP._to_numpy(preds[k_c1]).reshape(-1)
+
+        delta_paid = paid1 - paid0
+        delta_cost = cost1 - cost0
+
+        u1 = delta_paid - float(lambda_cost) * delta_cost
+        u0 = np.zeros_like(u1)
+
+        U = np.stack([u0, u1], axis=1)  # (B, 2)
+        treatment_ids = [0, 1]
+        return U, treatment_ids
+
+    @staticmethod
     def decision_robustness_under_epsilon(
         model: tf.keras.Model,
         sample_features: Any,
@@ -346,7 +399,7 @@ class RobustnessSDP:
         preds = model(sample_features, training=False)
 
         U, treatment_ids = RobustnessSDP.compute_utilities_from_predictions(
-            preds, utility_mode=utility_mode
+            preds
         )
 
         # margin between top-1 and top-2 utility
@@ -395,9 +448,9 @@ class RobustnessSDP:
 def main():
     # ===== 1) Load your trained model =====
     print(f"[INFO] Loading model")
-    # model = tf.keras.models.load_model("../0126-test/8-max/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5", compile=False)
-    # model = tf.keras.models.load_model("../0128-ECLIFT/1-mean-ratios/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.5", compile=False)
-    model = tf.keras.models.load_model("../final-ECLIFT/model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5", compile=False)
+    model = tf.keras.models.load_model("../final-criteo/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5", compile=False)
+    # model = tf.keras.models.load_model("../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0", compile=False)
+    # model = tf.keras.models.load_model("../final-ECLIFT/model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5", compile=False)
     model.summary()
 
     # ===== 2) Compute Lipschitz upper bound (layerwise SDP) =====
@@ -430,7 +483,9 @@ def main():
     #   "dense": tf.constant(dense_batch, tf.float32),
     #   "sparse": tf.constant(sparse_batch, tf.int32),
     # }
-    sample_path = "sample_features_ECLIFT.npz"
+        
+    # sample_path = "sample_features_ECLIFT.npz"
+    sample_path = "sample_features_criteo.npz"
 
     print(f"\n[INFO] Loading sample features from: {sample_path}")
     # Expect a .npz that stores either:

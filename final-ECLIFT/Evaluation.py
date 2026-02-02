@@ -168,20 +168,21 @@ eval_samples = eval_samples.map(
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
 
-    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    "./model/EcomDFCL_v3_wce_2pll_bs256_step500_mean_lr1e-3_clip=5e3_alpha=10",
-    "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
 ]
 model_paths_else = [
+    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    
+    "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
 
+    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 ]
 
 model_name_map = {
     "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3": "TPM-SL",
-    "./model/EcomDFCL_v3_wce_2pll_bs256_step500_mean_lr1e-3_clip=5e3_alpha=10": "DFCL-PL",
+    "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10": "DFCL-PL",
     "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5": "DFCL-MER",
     "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100": "DFCL-IFD",
     "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0": "CC-DFL(Ours)",
@@ -1071,7 +1072,7 @@ import json
 import matplotlib.pyplot as plt
 from typing import Dict, Any, List, Optional
 
-def plot_aucc_from_json_old(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
+def plot_aucc_from_json_old_old(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
     """
     从 JSON 文件加载一个或多个模型的 AUCC 数据并绘制对比图。
 
@@ -1139,7 +1140,7 @@ def plot_aucc_from_json_old(json_path: str, plot_path: str = 'aucc_comparison.pn
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
 
-def plot_aucc_from_json(
+def plot_aucc_from_json_old(
     json_path: str,
     plot_path: str = 'aucc_comparison.png',
     model_names: Optional[List[str]] = None,
@@ -1203,6 +1204,78 @@ def plot_aucc_from_json(
         )
 
     # 随机线：归一化坐标下就是 y=x
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
+
+    plt.title('AUCC Curve Comparison')
+    plt.xlabel('Cumulative Cost Difference (ΔC)')
+    plt.ylabel('Cumulative Reward Difference (ΔR)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"AUCC 曲线对比图已保存至: {plot_path}")
+
+from pathlib import Path
+import json
+import matplotlib.pyplot as plt
+from typing import Dict, Any, List, Optional
+
+def plot_aucc_from_json(
+    json_path: str,
+    plot_path: str = 'aucc_comparison.png',
+    model_names: Optional[List[str]] = None,
+    model_name_map: Optional[Dict[str, str]] = None,
+    fallback_to_basename: bool = True,
+):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_results: Dict[str, Dict[str, Any]] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"读取或解析文件 {json_path} 时出错: {e}")
+        return
+
+    if not all_results:
+        print("JSON 文件为空或格式不正确，无法绘图。")
+        return
+
+    model_name_map = model_name_map or {}
+
+    # ✅ 核心：按 model_names 的顺序决定绘图顺序（也决定 legend 顺序）
+    if model_names:
+        ordered_keys = [k for k in model_names if k in all_results]
+        not_found = [k for k in model_names if k not in all_results]
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
+    else:
+        # 不传 model_names 时，就按 JSON 的 key 顺序画
+        ordered_keys = list(all_results.keys())
+
+    if not ordered_keys:
+        print("没有找到可供绘制的模型数据。")
+        return
+
+    plt.figure(figsize=(10, 8))
+
+    for model_key in ordered_keys:
+        data = all_results.get(model_key, {})
+        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
+            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
+            continue
+
+        display_name = model_name_map.get(model_key)
+        if not display_name:
+            display_name = Path(model_key).name if fallback_to_basename else model_key
+
+        plt.plot(
+            data['x_coords'],
+            data['y_coords'],
+            marker='.',
+            linestyle='-',
+            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
+        )
+
+    # 随机线放最后（legend 也会在最后）
     plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
 
     plt.title('AUCC Curve Comparison')

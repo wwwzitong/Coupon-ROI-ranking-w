@@ -22,14 +22,15 @@ import json
 import matplotlib.pyplot as plt
 import datetime
 from pathlib import Path
+from typing import Dict, Any, List, Optional
 
 # from fsfc_mine_mx2 import * #自行生成fsfc文件（脚本放在data_flow中）
 # from data_utils_mx2 import *
 
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_ECLIFT import *
+from data_utils import *
 
 # 将输出保存到文件
 
@@ -114,7 +115,7 @@ def set_seeds(seed=42):
 set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
-    'eval_data': '../../data/ECLIFT_test.csv',
+    'eval_data': '../data/criteo_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -166,18 +167,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=2.5",
-
-
+    "./model/SLearner_2pos_lr3_clip=100",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1.0_clip=5e3_raw",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr3_alpha=100_clip=5e3_raw",
+    "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=100_clip=100_log1p",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5",
 ]
 model_paths_else = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.8",
+
+
 ]
 
+model_name_map = {
+    "./model/SLearner_2pos_lr3_clip=100": "TPM-SL",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1.0_clip=5e3_raw": "DFCL-PL",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr3_alpha=100_clip=5e3_raw": "DFCL-MER",
+    "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=100_clip=100_log1p": "DFCL-IFD",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5": "CC-DFL(Ours)",
+}
 
 # In[7]:
 
@@ -1062,7 +1069,7 @@ import json
 import matplotlib.pyplot as plt
 from typing import Dict, Any, List, Optional
 
-def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
+def plot_aucc_from_json_old(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
     """
     从 JSON 文件加载一个或多个模型的 AUCC 数据并绘制对比图。
 
@@ -1128,20 +1135,96 @@ def plot_aucc_from_json(json_path: str, plot_path: str = 'aucc_comparison.png', 
     plt.savefig(plot_path)
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
-    
+
+def plot_aucc_from_json(
+    json_path: str,
+    plot_path: str = 'aucc_comparison.png',
+    model_names: Optional[List[str]] = None,
+    model_name_map: Optional[Dict[str, str]] = None,
+    fallback_to_basename: bool = True,
+):
+    """
+    从 JSON 文件加载一个或多个模型的 AUCC 数据并绘制对比图。
+
+    Args:
+        json_path: AUCC 数据 JSON 路径
+        plot_path: 输出图片路径
+        model_names: 只绘制这些 key（通常是 model_path 列表）
+        model_name_map: {model_path: display_name}，用于图例显示
+        fallback_to_basename: 映射缺失时是否用 Path(model_path).name 回退
+    """
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_results: Dict[str, Dict[str, Any]] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"读取或解析文件 {json_path} 时出错: {e}")
+        return
+
+    if not all_results:
+        print("JSON 文件为空或格式不正确，无法绘图。")
+        return
+
+    results_to_plot = all_results
+    if model_names:
+        results_to_plot = {k: v for k, v in all_results.items() if k in model_names}
+
+        found = set(results_to_plot.keys())
+        not_found = set(model_names) - found
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found)}")
+
+    if not results_to_plot:
+        print("没有找到可供绘制的模型数据。")
+        return
+
+    plt.figure(figsize=(10, 8))
+
+    model_name_map = model_name_map or {}
+
+    for model_key, data in results_to_plot.items():
+        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
+            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
+            continue
+
+        # --- 核心：图例显示名逻辑 ---
+        display_name = model_name_map.get(model_key)
+        if not display_name:
+            display_name = Path(model_key).name if fallback_to_basename else model_key
+
+        plt.plot(
+            data['x_coords'],
+            data['y_coords'],
+            marker='.',
+            linestyle='-',
+            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
+        )
+
+    # 随机线：归一化坐标下就是 y=x
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
+
+    plt.title('AUCC Curve Comparison')
+    plt.xlabel('Cumulative Cost Difference (ΔC)')
+    plt.ylabel('Cumulative Reward Difference (ΔR)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.savefig(plot_path)
+    plt.close()
+    print(f"AUCC 曲线对比图已保存至: {plot_path}")
+
 #  'result_aucc.json'
 json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
 
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
 
 
 # In[22]:

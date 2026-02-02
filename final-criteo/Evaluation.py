@@ -167,24 +167,31 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
+    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1_clip=5e3_raw",
+    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1_clip=5e3_raw",
 
+    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5",
+    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1.0_clip=5e3_raw",
 
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 ]
 model_paths_else = [
-    "./model/SLearner_2pos_lr3_clip=10",
-    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1_clip=5e3_raw",
-    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=100_tau=1_log1p",
-    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p",
+    # "./model/SLearner_2pos_lr3_clip=100",
+    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=1_raw",
+    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p",
+
+    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
+
 ]
 
 model_name_map = {
-    "./model/SLearner_2pos_lr3_clip=10": "TPM-SL",
-    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1_clip=5e3_raw": "DFCL-PL",
-    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=100_tau=1_log1p": "DFCL-MER",
-    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p": "DFCL-IFD",
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5": "CC-DFL(Ours)",
+    # "./model/SLearner_2pos_lr3_clip=100": "TPM-SL",
+    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=1_clip=5e3_raw": "DFCL-PL",
+    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=1_raw": "DFCL-MER",
+    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p": "DFCL-IFD",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw": "CC-DFL(Ours)",
 }
 
 # In[7]:
