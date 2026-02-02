@@ -1,5 +1,8 @@
 from __future__ import print_function, absolute_import, division
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
+
 import sys
 import tensorflow as tf
 import numpy as np
@@ -20,8 +23,6 @@ if CODE_DIR not in sys.path:
 from data_utils import *
 
 import argparse # 导入 argparse 模块
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):
@@ -86,7 +87,7 @@ config = {
     'last_model_path': '',
     'train_data': '../../data/criteo_train.csv', 
     'val_data': '../../data/criteo_val.csv',
-    'batch_size': 256,
+    'batch_size': 4096,
     'num_epochs': 50,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
@@ -323,8 +324,34 @@ with strategy.scope():
         optimizer=optimizer,loss=None
     )
 
+##### 0125 New #####
+# 1) 更稳的 steps 计算（兼容 drop_remainder）
+num_rows = _count_csv_rows(config['train_data'])
+steps_per_epoch = max(1, num_rows // global_batch_size)
 
-model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
+val_rows = _count_csv_rows(config['val_data'])
+validation_steps = max(1, val_rows // global_batch_size)
+
+# 2) 确保不会第二个 epoch “没数据”
+train_samples = train_samples.repeat()
+val_samples = val_samples.repeat()
+
+# 3) 分布式分片策略（可选但推荐）
+options = tf.data.Options()
+options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+train_samples = train_samples.with_options(options)
+val_samples = val_samples.with_options(options)
+
+model.fit(
+    train_samples,
+    validation_data=val_samples,
+    epochs=config['num_epochs'],
+    steps_per_epoch=steps_per_epoch,
+    validation_steps=validation_steps,
+    callbacks=callbacks
+)
+
+# model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型
 print(f"训练完成，正在将模型保存到: {config['model_path']}")

@@ -113,7 +113,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 
 
 
 config = {
-    'eval_data': '../../data/criteo_train.csv',
+    'eval_data': '../../data/criteo_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -166,49 +166,18 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=5e3_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=5e3_global_raw_tau=1.2",
 
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=5e3_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=5e3_global_log1p_tau=1.2",
 
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=0.1_clip=100_log1p",
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=0.5_clip=100_log1p",
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=1.5_clip=100_log1p",
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=10_clip=100_log1p",
+
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=0.1_clip=100_raw",
+    # "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=0.5_clip=100_raw",
+    "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=1.5_clip=100_raw",
+    "./model/EcomDFCL_v3_4ifdl_ratios_bs256_2pos_lr1e-3_alpha=10_clip=100_raw",
     
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=100_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=100_global_raw_tau=1.2",
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=100_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=100_global_log1p_tau=1.2",
-
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=10_global_raw_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=10_global_raw_tau=1.2",
-
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.1_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=0.5_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.0_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=1.5_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=10.0_clip=10_global_log1p_tau=1.2",
-    "./model/EcomDFCL_v3_3erl_2pos_lr4_alpha=100.0_clip=10_global_log1p_tau=1.2",
 ]
 model_paths_else = [
 
@@ -1170,14 +1139,14 @@ json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
-""
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
 
 
 # In[22]:

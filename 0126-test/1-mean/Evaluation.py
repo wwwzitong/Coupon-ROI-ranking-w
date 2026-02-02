@@ -9,6 +9,9 @@
 
 from __future__ import print_function, absolute_import, division
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
+
 import sys
 import io
 import tensorflow as tf
@@ -110,10 +113,6 @@ def set_seeds(seed=42):
 
 set_seeds(42)  # 你可以更改为任何固定值
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-
-
 config = {
     'eval_data': '../../data/criteo_test.csv',
     'batch_size': 1024*16,
@@ -167,12 +166,11 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr2e-3_clip=5e3_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr1e-3_clip=5e3_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr5e-4_clip=5e3_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr1e-4_clip=5e3_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr5e-5_clip=5e3_max=1_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs1024_lr1e-5_clip=5e3_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_mean_Reduce_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_mean_Reduce_bs8192_lr1e-3_clip=5e3_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_mean_Reduce_bs4096_lr5e-4_clip=5e3_max=1_tau=1.0",
+    "./model/EcomDFCL_regretNet_rplusc_wce_mean_Reduce_bs8192_lr5e-4_clip=5e3_max=1_tau=1.0",
+
 
 ]
 model_paths_else = [

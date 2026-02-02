@@ -1,5 +1,5 @@
 
-python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 4096 --max_multiplier 1.0 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_all_penalty_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --rho 0.001 --tau 1.0 --bs 4096 --max_multiplier 1.0 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_penalty_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0_rho3
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 8192 --max_multiplier 1.0 --lr 5e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs8192_lr5e-3_clip=5e3_max=1_tau=1.0
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 4096 --max_multiplier 1.0 --lr 2e-3 --clipnorm 80 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs4096_lr2e-3_clip=80_max=1_tau=1.0
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 4096 --max_multiplier 1.0 --lr 1e-4 --clipnorm 80 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_all_batchmean_bs4096_lr1e-4_clip=80_max=1_tau=1.0

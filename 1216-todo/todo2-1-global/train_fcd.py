@@ -1,5 +1,8 @@
 from __future__ import print_function, absolute_import, division
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
+
 import sys
 import tensorflow as tf
 import numpy as np
@@ -32,8 +35,6 @@ from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
 # from dfcl_regretNet_v1_rc import EcomDFCL_regretNet_rc
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau
 import argparse # 导入 argparse 模块
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):
@@ -133,7 +134,7 @@ config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
 config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
-config['lr'] = args.lr
+config['learning_rate'] = args.lr
 config['tau'] = args.tau
 
 
@@ -145,7 +146,7 @@ print(f"Alpha: {config['alpha']}")
 print(f"tau(3erl): {config['tau']}")
 print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
-print(f"learning rate: {config['lr']}")
+print(f"learning rate: {config['learning_rate']}")
 print("--------------------")
 
 # In[9]:
@@ -325,6 +326,32 @@ with strategy.scope():
         optimizer=optimizer,loss=None
     )
 
+# ##### 0125 New #####
+# # 1) 更稳的 steps 计算（兼容 drop_remainder）
+# num_rows = _count_csv_rows(config['train_data'])
+# steps_per_epoch = max(1, num_rows // global_batch_size)
+
+# val_rows = _count_csv_rows(config['val_data'])
+# validation_steps = max(1, val_rows // global_batch_size)
+
+# # 2) 确保不会第二个 epoch “没数据”
+# train_samples = train_samples.repeat()
+# val_samples = val_samples.repeat()
+
+# # 3) 分布式分片策略（可选但推荐）
+# options = tf.data.Options()
+# options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+# train_samples = train_samples.with_options(options)
+# val_samples = val_samples.with_options(options)
+
+# # model.fit(
+# #     train_samples,
+# #     validation_data=val_samples,
+# #     epochs=config['num_epochs'],
+# #     steps_per_epoch=steps_per_epoch,
+# #     validation_steps=validation_steps,
+# #     callbacks=callbacks
+# # )
 
 model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 

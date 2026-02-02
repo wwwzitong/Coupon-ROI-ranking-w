@@ -280,7 +280,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         mse_c = tf.reduce_mean(tf.square(c_factual - y_c))
         return mse_r, mse_c
 
-    def factual_mse_constraint(self, predictions, labels):
+    def factual_mse_constraint_noweight(self, predictions, labels):
         """
         只在真实发生的 treatment 上计算 MSE（通过 one-hot mask 实现）：
 
@@ -334,6 +334,58 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
         mse_r = tf.reduce_sum(se_r_factual) / denom
         mse_c = tf.reduce_sum(se_c_factual) / denom
+
+        return mse_r, mse_c
+
+    def factual_mse_constraint(self, predictions, labels):
+        """
+        对齐 WCE 的 mean 逻辑：
+        - 误差先乘 pos_weight（只影响分子）
+        - 只保留 factual treatment（其他置 0）
+        - 最后对整批做 tf.reduce_mean（分母固定为 B，而不是 N_valid）
+        """
+        r_hat, c_hat = self._stack_pred_probs(predictions)  # [B, T]
+        y_r = tf.cast(labels['paid'], tf.float32)           # [B]
+        y_c = tf.cast(labels['cost'], tf.float32)           # [B]
+
+        # ====== 1) treatment value -> column index（保持你原来的映射逻辑） ======
+        mapping = {t: idx for idx, t in enumerate(self.treatment_order)}
+        max_t = max(mapping.keys())
+        table = [-1] * (max_t + 1)
+        for t, idx in mapping.items():
+            table[t] = idx
+        map_tensor = tf.constant(table, dtype=tf.int32)
+
+        t_val = tf.cast(labels['treatment'], tf.int32)      # [B]
+        col_idx = tf.gather(map_tensor, t_val)              # [B]，可能含 -1
+
+        # ====== 2) 构造 mask：只保留 factual treatment 对应的列 ======
+        valid = col_idx >= 0
+        safe_col_idx = tf.where(valid, col_idx, tf.zeros_like(col_idx))
+
+        mask = tf.one_hot(safe_col_idx, depth=tf.shape(r_hat)[1], dtype=tf.float32)  # [B, T]
+        mask = mask * tf.cast(tf.expand_dims(valid, 1), tf.float32)                  # 无效样本整行清零
+
+        # ====== 3) squared error + factual 选择 ======
+        y_r_2d = tf.expand_dims(y_r, axis=1)  # [B, 1]
+        y_c_2d = tf.expand_dims(y_c, axis=1)  # [B, 1]
+
+        se_r_all = tf.square(r_hat - y_r_2d)  # [B, T]
+        se_c_all = tf.square(c_hat - y_c_2d)  # [B, T]
+
+        se_r_factual = tf.reduce_sum(se_r_all * mask, axis=1)  # [B]
+        se_c_factual = tf.reduce_sum(se_c_all * mask, axis=1)  # [B]
+
+        # ====== 4) 加入 pos_weight（与 WCE 相同：label>0 用 pos_weight 否则 1.0）=====
+        w_r = tf.where(y_r > 0, tf.cast(self.paid_pos_weight, tf.float32), 1.0)  # [B]
+        w_c = tf.where(y_c > 0, tf.cast(self.cost_pos_weight, tf.float32), 1.0)  # [B]
+
+        se_r_factual = se_r_factual * w_r
+        se_c_factual = se_c_factual * w_c
+
+        # ====== 5) mean：对齐 WCE（分母固定为 batch size B）=====
+        mse_r = tf.reduce_mean(se_r_factual)
+        mse_c = tf.reduce_mean(se_c_factual)
 
         return mse_r, mse_c
 

@@ -21,7 +21,7 @@ class EcomDFCL_regretNet_rc(tf.keras.Model):
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier_paid=1.5, max_multiplier_cost=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier_paid=0.005, max_multiplier_cost=0.04, tau=1.0, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
         self.cost_pos_weight=95.30/(100-95.30)
@@ -220,7 +220,7 @@ class EcomDFCL_regretNet_rc(tf.keras.Model):
                 sample_weights = tf.where(label > 0, pos_weight, 1.0)
                 weighted_loss_per_sample = loss_per_sample * sample_weights
                 masked_loss = weighted_loss_per_sample * treatment_mask               
-                local_loss += tf.reduce_sum(masked_loss)
+                local_loss += tf.reduce_mean(masked_loss)
 
             if target_name == 'paid':
                 paid_loss += local_loss
@@ -255,7 +255,7 @@ class EcomDFCL_regretNet_rc(tf.keras.Model):
             mask_tensor = tf.concat(mask_list, axis=1) # 样本真实 treatment 的 one-hot 编码
             ratio_target = tf.reshape(labels['paid'] - ratio * labels['cost'], [-1, 1]) #样本的真实收益
             # cancat_tensor * mask_tensor 的结果是，只保留模型对真实 treatment 的“最优概率”预测，其他位置为0
-            decision_loss = tf.reduce_sum(softmax_tensor * mask_tensor * ratio_target)
+            decision_loss = tf.reduce_mean(softmax_tensor * mask_tensor * ratio_target)
 
             decision_loss_sum += decision_loss
             

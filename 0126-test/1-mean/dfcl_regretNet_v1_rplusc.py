@@ -15,53 +15,6 @@ statistical_config={
     'N0':1677550
 }
 
-class ResidualMLPBlock(tf.keras.layers.Layer):
-    """
-    残差 MLP 块： (Dense -> Act -> Dropout -> Dense) + Skip，然后做 LayerNorm
-    好处：可以把网络加深，但梯度更稳定，不容易“越堆越难训”
-    """
-    def __init__(self, hidden_dim, dropout=0.2, activation="swish", **kwargs):
-        super().__init__(**kwargs)
-        self.hidden_dim = hidden_dim
-        self.dropout_rate = dropout
-        self.activation = activation
-
-        self.fc1 = tf.keras.layers.Dense(
-            hidden_dim, activation=None, kernel_initializer="glorot_normal"
-        )
-        self.act1 = tf.keras.layers.Activation(activation)
-        self.dp1 = tf.keras.layers.Dropout(dropout)
-
-        self.fc2 = tf.keras.layers.Dense(
-            hidden_dim, activation=None, kernel_initializer="glorot_normal"
-        )
-
-        # 如果输入维度 != hidden_dim，用投影对齐残差
-        self.proj = None
-
-        self.ln = tf.keras.layers.LayerNormalization(epsilon=1e-6)
-        self.act_out = tf.keras.layers.Activation(activation)
-
-    def build(self, input_shape):
-        in_dim = int(input_shape[-1])
-        if in_dim != self.hidden_dim:
-            self.proj = tf.keras.layers.Dense(
-                self.hidden_dim, activation=None, kernel_initializer="glorot_normal"
-            )
-        super().build(input_shape)
-
-    def call(self, x, training=False):
-        h = self.fc1(x)
-        h = self.act1(h)
-        h = self.dp1(h, training=training)
-        h = self.fc2(h)
-
-        skip = self.proj(x) if self.proj is not None else x
-        y = self.ln(h + skip)
-        y = self.act_out(y)
-        return y
-    
-
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     """
     使用 TensorFlow 2.x Keras API 实现的电商模型。

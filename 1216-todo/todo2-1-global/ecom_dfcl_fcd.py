@@ -643,7 +643,7 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
         # 【修复7】：对最终损失进行范围限制
         ifdl_loss = tf.clip_by_value(ifdl_loss, -1e6, 1e6)
         
-        return ifdl_loss
+        return ifdl_loss / len(self.ratios)
     
     def _add_summaries(self, name, tensor, step):
         """辅助函数，用于在TensorBoard中记录张量的统计信息"""
