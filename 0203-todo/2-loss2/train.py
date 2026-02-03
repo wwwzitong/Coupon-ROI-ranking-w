@@ -3,85 +3,14 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
 
-# ========= 必须尽量放在文件最开头：在 import tensorflow 之前 =========
-def set_global_determinism(seed: int = 42,
-                           deterministic_ops: bool = True,
-                           limit_threads: bool = True,
-                           disable_xla: bool = True,
-                           disable_tf32: bool = True,
-                           disable_onednn: bool = False):
-    # 1) Python hash seed（必须尽早）
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    # 2) TF / cuDNN 确定性（必须在 import tensorflow 前设置才最稳）
-    if deterministic_ops:
-        os.environ["TF_DETERMINISTIC_OPS"] = "1"
-        os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
-
-    # 3) 可选：禁用 XLA（避免某些图优化路径带来差异）
-    if disable_xla:
-        os.environ.setdefault("TF_XLA_FLAGS", "--tf_xla_auto_jit=0")
-
-    # 4) 可选：禁用 TF32（Ampere+ GPU 上 matmul/conv 可能走 TF32）
-    if disable_tf32:
-        os.environ["NVIDIA_TF32_OVERRIDE"] = "0"
-
-    # 5) 可选：CPU oneDNN 有时会带来不一致（不同线程/指令）
-    if disable_onednn:
-        os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-
-    # ---- 下面开始才 import ----
-    import random
-    import numpy as np
-    import tensorflow as tf
-
-    # Python / NumPy
-    random.seed(seed)
-    np.random.seed(seed)
-
-    # TF：推荐用 keras 的统一接口
-    try:
-        tf.keras.utils.set_random_seed(seed)
-    except Exception:
-        tf.random.set_seed(seed)
-
-    # 开启 TF 的确定性（TF 2.9+ 支持）
-    if deterministic_ops:
-        try:
-            tf.config.experimental.enable_op_determinism(True)
-        except Exception:
-            pass
-
-    # 限制线程数，减少归约顺序差异（会影响速度）
-    if limit_threads:
-        try:
-            tf.config.threading.set_intra_op_parallelism_threads(1)
-            tf.config.threading.set_inter_op_parallelism_threads(1)
-        except Exception:
-            pass
-
-    # 再次确保不使用 TF32（以 API 方式）
-    if disable_tf32:
-        try:
-            tf.config.experimental.enable_tensor_float_32_execution(False)
-        except Exception:
-            pass
-
-    print(f"[Determinism] seed={seed}, deterministic_ops={deterministic_ops}, "
-          f"threads_limited={limit_threads}, xla_disabled={disable_xla}, tf32_disabled={disable_tf32}")
-
-    return tf  # 可选：返回 tf 以提示调用者在这里之后再使用 tf
-
-
-# 用法：把它放在文件最顶部调用
-tf = set_global_determinism(42)
-
 import sys
-# import tensorflow as tf
+import tensorflow as tf
+import numpy as np
 import math
 import json
 import shutil
 import argparse
+import random
 import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
@@ -94,6 +23,33 @@ if CODE_DIR not in sys.path:
 from data_utils import *
 
 import argparse # 导入 argparse 模块
+
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
 
 # 强制UTF-8编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

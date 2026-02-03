@@ -1,0 +1,87 @@
+
+评估结果DataFrame示例:
+   paid  cost  treatment    uplift       roi  treat_paid  treat_cost  ctrl_paid  ctrl_cost  uplift_paid  uplift_cost
+0   0.0   0.0        1.0  0.142840 -4.014850    0.230364    0.166713   0.485153   0.103251    -0.254789     0.063462
+1   0.0   0.0        1.0  0.023360 -1.545891    0.066986    0.083097   0.095691   0.064529    -0.028705     0.018568
+2   0.0   0.0        0.0 -0.015732 -2.153671    0.126722    0.271341   0.441091   0.125372    -0.314369     0.145969
+3   0.0   0.0        1.0  0.002816 -3.862540    0.143305    0.267600   0.554428   0.161161    -0.411122     0.106438
+4   0.0   0.0        1.0  0.023755 -4.299934    0.036035    0.023390   0.063729   0.016950    -0.027694     0.006441
+正在计算 AUCC 指标...
+
+保存成功！后续可加载此文件直接绘制 AUCC 曲线，无需重新计算。
+模型 ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5 的 AUCC 分数为: 0.803912
+检测到 AUCC 曲线下降区间: 从第 18 个点到第 19 个点。
+  - Delta Gain: 763.31 -> 759.35
+  - 对应原始排序后样本范围 (索引从1开始): 18 -> 19
+检测到 AUCC 曲线下降区间: 从第 23 个点到第 24 个点。
+  - Delta Gain: 878.88 -> 874.58
+  - 对应原始排序后样本范围 (索引从1开始): 23 -> 24
+检测到 AUCC 曲线下降区间: 从第 27 个点到第 28 个点。
+  - Delta Gain: 928.62 -> 918.94
+  - 对应原始排序后样本范围 (索引从1开始): 27 -> 28
+检测到 AUCC 曲线下降区间: 从第 45 个点到第 46 个点。
+  - Delta Gain: 1176.52 -> 1173.22
+  - 对应原始排序后样本范围 (索引从1开始): 45 -> 46
+检测到 AUCC 曲线下降区间: 从第 58 个点到第 59 个点。
+  - Delta Gain: 1301.50 -> 1297.73
+  - 对应原始排序后样本范围 (索引从1开始): 58 -> 59
+检测到 AUCC 曲线下降区间: 从第 69 个点到第 70 个点。
+  - Delta Gain: 1354.82 -> 1349.01
+  - 对应原始排序后样本范围 (索引从1开始): 69 -> 70
+检测到 AUCC 曲线下降区间: 从第 71 个点到第 72 个点。
+  - Delta Gain: 1354.90 -> 1353.58
+  - 对应原始排序后样本范围 (索引从1开始): 71 -> 72
+检测到 AUCC 曲线下降区间: 从第 88 个点到第 89 个点。
+  - Delta Gain: 1508.38 -> 1508.06
+  - 对应原始排序后样本范围 (索引从1开始): 88 -> 89
+检测到 AUCC 曲线下降区间: 从第 91 个点到第 92 个点。
+  - Delta Gain: 1529.52 -> 1519.26
+  - 对应原始排序后样本范围 (索引从1开始): 91 -> 92
+检测到 AUCC 曲线下降区间: 从第 95 个点到第 96 个点。
+  - Delta Gain: 1580.04 -> 1579.16
+  - 对应原始排序后样本范围 (索引从1开始): 95 -> 96
+检测到 AUCC 曲线下降区间: 从第 99 个点到第 100 个点。
+  - Delta Gain: 1598.13 -> 1590.07
+  - 对应原始排序后样本范围 (索引从1开始): 98 -> 99
+
+已将所有下降区间的样本数据保存至: result/dip_samples.csv
+模型 ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5 的 AUCC公司版本 分数为: 0.706379
+正在计算 AUUC 指标...
+{'auuc_score': 0.8573252653586511, 'baseline_auuc': 0.5, 'qini_coefficient': 0.7146505307173021}
+{'auuc_score': 0.17501188533728587, 'baseline_auuc': 0.5, 'qini_coefficient': -0.6499762293254283}
+正在生成 AUCC Plot (Uplift)...
+AUCC Plot (uplift) 已保存至: ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5/result/aucc_uplift_treat1_20260202_235307.png
+{'uplift': {'score': 0.698350859325609, 'treatment': 1, 'random_score': 0.5}}
+正在生成 AUCC Plot (ROI)...
+AUCC Plot (roi) 已保存至: ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5/result/aucc_roi_treat1_20260202_235308.png
+{'roi': {'score': 0.7086032952903002, 'treatment': 1, 'random_score': 0.5}}
+
+---------- 额外评估指标 ----------
+
+模型预估值与真实值均值对比 (实验组):
+  - Paid: 预估平均值 = 0.1337, 真实平均值 = 0.0031
+  - Cost: 预估平均值 = 0.2310, 真实平均值 = 0.0485
+
+计算 Regression AUC (regAUC, 在实验组上):
+  - Paid regAUC: 0.9564
+  - Cost regAUC: 0.9444
+
+模型预估值与真实值均值对比 (对照组):
+  - Paid: 预估平均值 = 1.1277, 真实平均值 = 0.0019
+  - Cost: 预估平均值 = 0.0987, 真实平均值 = 0.0382
+
+计算 Regression AUC (regAUC, 在对照组上):
+  - Paid regAUC: 0.8415
+  - Cost regAUC: 0.9331
+
+评估结果DataFrame示例:
+   paid  cost  treatment    uplift       roi  treat_paid  treat_cost  ctrl_paid  ctrl_cost  uplift_paid  uplift_cost
+0   0.0   0.0        1.0  0.142840 -4.014850    0.230364    0.166713   0.485153   0.103251    -0.254789     0.063462
+1   0.0   0.0        1.0  0.023360 -1.545891    0.066986    0.083097   0.095691   0.064529    -0.028705     0.018568
+2   0.0   0.0        0.0 -0.015732 -2.153671    0.126722    0.271341   0.441091   0.125372    -0.314369     0.145969
+3   0.0   0.0        1.0  0.002816 -3.862540    0.143305    0.267600   0.554428   0.161161    -0.411122     0.106438
+4   0.0   0.0        1.0  0.023755 -4.299934    0.036035    0.023390   0.063729   0.016950    -0.027694     0.006441
+正在生成 Paid Uplift Bar Plot...
+Uplift Bar Plot 已保存至: ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5/result/uplift_bar_paid_20260203_160636.png
+正在生成 Cost Uplift Bar Plot...
+Uplift Bar Plot 已保存至: ./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5/result/uplift_bar_cost_20260203_160637.png

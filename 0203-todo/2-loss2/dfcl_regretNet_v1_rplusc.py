@@ -24,7 +24,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.71/(100-99.71)
-        self.cost_pos_weight=95.30/(100-95.30)
+        self.cost_pos_weight = 95.30/(100-95.30)
         
         # --- 增广拉格朗日方法超参数 ---
         self.rho = rho  # 二次惩罚项的系数 ρ
@@ -190,7 +190,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self._last_user_tower_activations = user_tower_activations
         return predictions
 
-    def compute_local_losses_old(self, predictions, labels):
+    def compute_local_losses(self, predictions, labels):
         paid_loss = tf.constant(0.0, dtype=tf.float32)
         cost_loss = tf.constant(0.0, dtype=tf.float32)
 
@@ -229,81 +229,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
         return paid_loss, cost_loss
 
-    def compute_local_losses(self, predictions, labels):
-        paid_loss = tf.constant(0.0, dtype=tf.float32)
-        cost_loss = tf.constant(0.0, dtype=tf.float32)
-
-        # treatment idx
-        treatment_idx = tf.cast(labels['treatment'], tf.int32)
-
-        # ===== 新增：batch 内纠偏权重 w_i = N / N_{t_i} =====
-        batch_size = tf.cast(tf.shape(treatment_idx)[0], tf.float32)
-        eps = tf.constant(1e-8, dtype=tf.float32)
-
-        # one-hot masks (float32)
-        treatment_masks = {
-            t: tf.cast(tf.equal(treatment_idx, t), tf.float32) for t in self.treatment_order
-        }
-
-        # per-sample ipw weight
-        ipw_weight = tf.zeros_like(tf.cast(treatment_idx, tf.float32), dtype=tf.float32)
-        for t in self.treatment_order:
-            n_t = tf.reduce_sum(treatment_masks[t])
-            n_t = tf.maximum(n_t, 1.0)  # 防止 batch 内某个 treatment 缺失
-            w_t = batch_size / (n_t + eps)
-            ipw_weight += treatment_masks[t] * w_t
-
-        # [B] -> [B]，后面逐元素乘即可
-        # 可选：防止极端小 n_t 导致权重爆炸
-        # ipw_weight = tf.clip_by_value(ipw_weight, 0.0, 50.0)
-
-        # ===== 计算两任务 loss =====
-        for target_name in self.targets:
-            if target_name == 'paid':
-                pos_weight = self.paid_pos_weight
-            else:
-                pos_weight = self.cost_pos_weight
-
-            local_loss = tf.constant(0.0, dtype=tf.float32)
-
-            for treatment in self.treatment_order:
-                pred_name = f"{target_name}_treatment_{treatment}"
-                logit = predictions[pred_name]
-
-                out = tf.minimum(logit, 10.0)
-                label = tf.cast(labels[target_name], tf.float32)
-
-                # 原始 per-sample loss（你原来的写法）
-                term1 = -label * out
-                term2 = (1 + label) * (tf.maximum(out, 0) + tf.math.log(1 + tf.exp(-tf.abs(out))))
-                loss_per_sample = term1 + term2
-
-                # mask
-                treatment_mask = treatment_masks[treatment]
-
-                # 正负样本权重（你原来的）
-                pos_w = tf.where(label > 0, pos_weight, 1.0)
-
-                # ===== 新增：把纠偏权重乘进去 =====
-                # 总权重 = pos_w * ipw_weight
-                total_w = pos_w * ipw_weight
-
-                weighted_loss_per_sample = loss_per_sample * total_w
-                masked_loss = weighted_loss_per_sample * treatment_mask
-
-                # ⚠️ 注意：这里仍然用 reduce_mean，等价于:
-                # mean( I(t_i=t) * w_i * loss_i )
-                # 这会让 treatment 稀有组贡献更大（符合你的纠偏目的）
-                local_loss += tf.reduce_mean(masked_loss)
-
-            if target_name == 'paid':
-                paid_loss += local_loss
-            else:
-                cost_loss += local_loss
-
-        return paid_loss, cost_loss
-
-    def decision_learning_objective_term_v1(self, predictions, labels): # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
+    def decision_learning_objective_term(self, predictions, labels): # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
         decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
         # 预先计算 treatment_mask（仅一次）
         treatment_idx = tf.cast(labels['treatment'], tf.int32)
@@ -334,87 +260,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             
         # return decision_loss_sum / len(self.ratios)
         return decision_loss_sum
-    
-    def decision_learning_objective_term_v2(self, predictions, labels):  # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
-        """
-        按照公式：
-            \sum_{i} τ * log( \sum_{j} exp( ( r̂_{ij}(θ) - λ ĉ_{ij}(θ) ) / τ ) )
-        这里 i 是 batch 内样本，j 是 treatment 集合。
-        注意：不再只对观测到的 treatment 计算，而是对所有 treatment 全部计算。
-        """
-        decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
 
-        # 预测值（这里保持你原来的“先 sigmoid 再用”的习惯；sigmoid 本身不会超过 1，因此不需要再 tf.minimum(..., 10.0)）
-        pred_dict = {key: tf.nn.sigmoid(logit) for key, logit in predictions.items()}
-
-        for ratio in self.ratios:  # ratio 即公式里的 λ
-            utility_list = []
-            for treatment in self.treatment_order:  # treatment 即公式里的 j
-                r_hat = pred_dict[f"paid_treatment_{treatment}"]  # r̂_ij
-                c_hat = pred_dict[f"cost_treatment_{treatment}"]  # ĉ_ij
-                u = r_hat - ratio * c_hat                         # r̂_ij - λ ĉ_ij
-                utility_list.append(tf.reshape(u, [-1, 1]))        # [B, 1]
-
-            # U: [B, T]
-            utility_tensor = tf.concat(utility_list, axis=1)
-
-            # per-sample: τ * logsumexp( U / τ )，结果 [B]
-            per_sample_term = self.tau * tf.reduce_logsumexp(utility_tensor / self.tau, axis=1)
-
-            # batch 聚合：用 mean 保持数值尺度稳定（若严格按公式求和，可改为 tf.reduce_sum）
-            decision_loss = tf.reduce_mean(per_sample_term)
-
-            decision_loss_sum += decision_loss
-
-        return decision_loss_sum/len(self.ratios)
-
-    def decision_learning_objective_term(self, predictions, labels):
-        """
-        mean_i [ w_i * ( τ * logsumexp_j( (r_hat_ij - λ c_hat_ij)/τ ) ) ]
-        w_i = N / N_{t_i}  (N=batch size, N_{t_i}=batch内观测treatment为t_i的样本数)
-        treatment 仅 {0,1}，无需 table 映射
-        """
-
-        # ---- 0) 观测 treatment: [B] ----
-        t_obs = labels["treatment"]
-
-        # 确保是 int32 且只包含 0/1（如果你数据里是 float 0.0/1.0 也能兼容）
-        t_idx = tf.cast(tf.round(t_obs), tf.int32)  # [B]
-        tf.debugging.assert_less_equal(tf.reduce_max(t_idx), 1, message="treatment 只能为 0/1")
-        tf.debugging.assert_greater_equal(tf.reduce_min(t_idx), 0, message="treatment 只能为 0/1")
-
-        # ---- 1) 预测值 ----
-        pred_dict = {key: tf.nn.sigmoid(logit) for key, logit in predictions.items()}
-
-        # ---- 2) 纠偏权重 w_i = N / N_{t_i} ----
-        batch_size_i = tf.shape(t_idx)[0]                     # int32
-        batch_size = tf.cast(batch_size_i, tf.float32)        # float32
-
-        # counts: [2] -> [N0, N1]
-        counts = tf.math.bincount(t_idx, minlength=2, maxlength=2, dtype=tf.int32)
-        per_sample_count = tf.gather(counts, t_idx)           # [B]
-
-        w = batch_size / (tf.cast(per_sample_count, tf.float32) + 1e-8)  # [B]
-
-        decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
-
-        # ---- 3) 计算 logsumexp over all j，然后按 w 加权 ----
-        # 这里 T=2，treatment_order 应该是 [0,1]
-        for ratio in self.ratios:  # λ
-            utility_list = []
-            for treatment in self.treatment_order:  # j in {0,1}
-                r_hat = pred_dict[f"paid_treatment_{treatment}"]
-                c_hat = pred_dict[f"cost_treatment_{treatment}"]
-                u = r_hat - ratio * c_hat
-                utility_list.append(tf.reshape(u, [-1, 1]))  # [B,1]
-
-            utility_tensor = tf.concat(utility_list, axis=1)  # [B,2]
-            per_sample_term = self.tau * tf.reduce_logsumexp(utility_tensor / self.tau, axis=1)  # [B]
-
-            weighted_loss = tf.reduce_sum(w * per_sample_term) / (tf.reduce_sum(w) + 1e-8)
-            decision_loss_sum += weighted_loss
-
-        return decision_loss_sum / tf.cast(len(self.ratios), tf.float32)
 
     def _add_summaries(self, name, tensor, step):
         """辅助函数，用于在TensorBoard中记录张量的统计信息"""

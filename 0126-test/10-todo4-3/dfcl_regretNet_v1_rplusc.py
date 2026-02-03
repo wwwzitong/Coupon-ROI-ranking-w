@@ -392,26 +392,33 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         # 3. primal update
         self.optimizer.apply_gradients(zip(model_gradients, model_variables))
 
-        tf.print("iter=", self.optimizer.iterations, "mod=", self.optimizer.iterations % self.lambda_update_frequency)
+        tf.print("iter=", self.global_step, "freq=", self.lambda_update_frequency, "mod=", self.global_step % self.lambda_update_frequency)
 
         # 用我们自己的 step（保证每个 batch +1）
         self.global_step.assign_add(1)
-        gstep = self.global_step  # int64
 
-        Q = tf.cast(self.lambda_update_frequency, gstep.dtype)
+        # should_update = tf.equal(self.global_step % self.lambda_update_frequency, 0)
 
-        def update_mu():
-            new_mu = self.mu + self.rho * tf.stop_gradient(prediction_loss)
-            self.mu.assign(new_mu)  # 需要clip就这里clip
-            return tf.constant(True)
+        # def update_mu():
+        #     new_mu = self.mu + self.rho * tf.stop_gradient(prediction_loss)
+        #     self.mu.assign(new_mu)
+        #     # 在 tf.function 中，我们通常不返回无用的布尔值
+        #     return
+            
+        # def no_mu_update():
+        #     # 什么也不做
+        #     return
 
-        def no_mu_update():
-            return tf.constant(False)
+        # # tf.cond 现在会正确地在运行时进行判断
+        # tf.cond(should_update, update_mu, no_mu_update)
 
-        # 可选：通常不希望 step=0/1 就更新，可加 gstep>0
-        do_update = tf.equal(tf.math.floormod(gstep, Q), 0)
+        flag = tf.cast(
+            tf.equal(self.global_step % self.lambda_update_frequency, 0),
+            self.mu.dtype
+        )
+        new_mu = self.mu + flag * self.rho * tf.stop_gradient(prediction_loss)
+        self.mu.assign(new_mu)
 
-        tf.cond(do_update, update_mu, no_mu_update)
 
 
         # --- 梯度分析与监控 ---
