@@ -211,12 +211,16 @@ eval_samples = eval_samples.map(
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
 
-    "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0_p2",
+    # "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0_p2",  (0.7785)
 
     # "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr2e-3_clip=5e3_max=1_tau=1.0_p2",
     # "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr5e-3_clip=5e3_max=1_tau=1.0_p2",
     # "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr1e-4_clip=5e3_max=1_tau=1.0_p2",
     # "./model/rplusc_wce_LSE_mean_Nt_bs4096_lr5e-4_clip=5e3_max=1_tau=1.0_p2",
+
+    "./model/rplusc_wce_LSE_mean_ratios_Nt_bs4096_lr5e-4_clip=5e3_max=1_tau=1.0_p2",
+    "./model/rplusc_wce_LSE_mean_ratios_Nt_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0_p2",
+
 
 ]
 model_paths_else = [

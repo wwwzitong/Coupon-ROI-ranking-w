@@ -170,17 +170,19 @@ eval_samples = eval_samples.map(
 model_paths_DFCL = [
     
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=2.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=2.5",
 
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.05_tau=1.2",
 
 ]
 model_paths_else = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.8",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.8",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.5",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=2.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=2.5",
 ]
 
 

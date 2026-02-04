@@ -1,6 +1,35 @@
 import tensorflow as tf
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 import os
+import numpy as np
+import random
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
+
 import sys
 import io
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))

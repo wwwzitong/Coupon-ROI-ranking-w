@@ -332,8 +332,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
             
-        # return decision_loss_sum / len(self.ratios)
-        return decision_loss_sum
+        return decision_loss_sum / len(self.ratios)
+        # return decision_loss_sum
     
     def decision_learning_objective_term_v2(self, predictions, labels):  # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
         """

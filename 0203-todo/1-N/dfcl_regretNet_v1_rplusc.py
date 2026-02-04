@@ -332,8 +332,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
             
-        # return decision_loss_sum / len(self.ratios)
-        return decision_loss_sum
+        return decision_loss_sum / len(self.ratios)
+        # return decision_loss_sum
 
     def decision_learning_objective_term(self, predictions, labels): #decision loss也和论文有出入
         '''
@@ -384,8 +384,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
 
-        # return decision_loss_sum / len(self.ratios)
-        return decision_loss_sum
+        return decision_loss_sum / len(self.ratios)
+        # return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):
