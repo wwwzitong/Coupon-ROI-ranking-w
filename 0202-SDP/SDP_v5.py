@@ -7,6 +7,31 @@ import tensorflow as tf
 from typing import Any, Dict, List, Optional, Tuple, Union
 import json
 
+
+def _try_solve(prob: cp.Problem, prefer: Optional[str] = None, verbose: bool = False) -> None:
+    """
+    Try solving with a preferred solver; fallback to others commonly available.
+    """
+    solvers = []
+    if prefer:
+        solvers.append(prefer)
+
+    # Common CVXPY solvers (availability depends on environment)
+    solvers += ["MOSEK", "GUROBI", "CVXOPT", "SCS", "ECOS"]
+
+    last_err = None
+    for s in solvers:
+        try:
+            prob.solve(solver=getattr(cp, s), verbose=verbose)
+            if prob.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+                # print(f"solver: {s}")
+                return
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise RuntimeError(f"SDP solve failed. Last error: {last_err}, status={prob.status}")
+
 # -----------------------------
 # Empirical Lipschitz estimate
 # -----------------------------
@@ -188,6 +213,7 @@ class RobustnessSDP:
         W: np.ndarray,
         p_structure: str = "diag",
         solver: Optional[str] = None,
+        eps_pd: float = 1e-6, 
         verbose: bool = False
     ) -> float:
         """
@@ -205,11 +231,11 @@ class RobustnessSDP:
             P = cp.Variable((n_in, n_in), PSD=True)
             P_mat = P
             # 约束 P 的最小特征值 >= 1 (代替 epsilon)
-            P_lb = np.eye(n_in) 
+            P_lb = eps_pd * np.eye(n_in) 
         else: # diag
             p = cp.Variable(n_in, nonneg=True)
             P_mat = cp.diag(p)
-            P_lb = np.eye(n_in)
+            P_lb = eps_pd * np.eye(n_in)
 
         # 2. LMI 约束: 
         # [ P       P W^T ]
@@ -223,13 +249,17 @@ class RobustnessSDP:
         constraints = [block >> 0, P_mat - P_lb >> 0]
         
         prob = cp.Problem(cp.Minimize(gamma), constraints)
-        
-        try:
-            # 优先尝试 SCS 或 MOSEK，如果失败则捕获
-            prob.solve(solver=solver, verbose=verbose)
-        except Exception as e:
-            print(f"  [SDP Error] {e}. Fallback to numpy spectral norm.")
-            return float(np.linalg.norm(W, ord=2))
+        _try_solve(prob, prefer=solver, verbose=verbose)
+
+        if gamma.value is None:
+            raise RuntimeError(f"SDP returned no gamma. status={prob.status}")
+
+        # try:
+        #     # 优先尝试 SCS 或 MOSEK，如果失败则捕获
+        #     prob.solve(solver=solver, verbose=verbose)
+        # except Exception as e:
+        #     print(f"  [SDP Error] {e}. Fallback to numpy spectral norm.")
+        #     return float(np.linalg.norm(W, ord=2))
 
         if prob.status not in [cp.OPTIMAL, cp.OPTIMAL_INACCURATE] or gamma.value is None:
             # 求解失败兜底
@@ -238,7 +268,7 @@ class RobustnessSDP:
         # 3. 计算结果
         # 原理：W P W^T <= gamma I. 因为 P >= I，所以 W W^T <= gamma I.
         # L = sqrt(gamma)
-        return float(np.sqrt(max(gamma.value, 1e-16)))
+        return float(np.sqrt(max(gamma.value, 1e-16) / eps_pd))
 
     @staticmethod
     def get_sequential_lipschitz(model_seq: tf.keras.Sequential) -> float:
@@ -370,6 +400,66 @@ class RobustnessSDP:
         L_decision = p1 + p0 + abs(lambda_cost) * c1 + abs(lambda_cost) * c0
         return L_decision
     
+    @staticmethod
+    def _to_numpy(x: Any) -> np.ndarray:
+        if isinstance(x, np.ndarray):
+            return x
+        if tf.is_tensor(x):
+            return x.numpy()
+        return np.asarray(x)
+    
+    @staticmethod
+    def compute_utilities_from_predictions(
+        preds: Any,
+        paid_prefix: str = "paid_treatment_",
+        cost_prefix: str = "cost_treatment_",
+        lambda_cost: float = 0.5,
+    ) -> Tuple[np.ndarray, List[int]]:
+        """
+        Binary decision utility:
+        u1 = (paid_1 - paid_0) - lambda * (cost_1 - cost_0)
+        decide treatment=1 if u1 > 0 else 0
+
+        To keep the rest of the pipeline unchanged (argmax & margin),
+        we build U = [u0, u1] with u0 = 0. So argmax(U) matches the threshold rule.
+
+        Expected keys in preds:
+        paid_treatment_0, paid_treatment_1, cost_treatment_0, cost_treatment_1
+
+        Returns:
+        U: shape (B, 2) where columns correspond to treatment_ids [0, 1]
+        treatment_ids: [0, 1]
+        """
+        if not isinstance(preds, dict):
+            raise ValueError("Model output must be a dict for compute_utilities_from_predictions().")
+
+        # Required keys
+        k_p0 = f"{paid_prefix}0"
+        k_p1 = f"{paid_prefix}1"
+        k_c0 = f"{cost_prefix}0"
+        k_c1 = f"{cost_prefix}1"
+
+        missing = [k for k in [k_p0, k_p1, k_c0, k_c1] if k not in preds]
+        if missing:
+            raise ValueError(
+                "Missing required prediction keys for incremental decision: " + ", ".join(missing)
+            )
+
+        paid0 = RobustnessSDP._to_numpy(preds[k_p0]).reshape(-1)
+        paid1 = RobustnessSDP._to_numpy(preds[k_p1]).reshape(-1)
+        cost0 = RobustnessSDP._to_numpy(preds[k_c0]).reshape(-1)
+        cost1 = RobustnessSDP._to_numpy(preds[k_c1]).reshape(-1)
+
+        delta_paid = paid1 - paid0
+        delta_cost = cost1 - cost0
+
+        u1 = delta_paid - float(lambda_cost) * delta_cost
+        u0 = np.zeros_like(u1)
+
+        U = np.stack([u0, u1], axis=1)  # (B, 2)
+        treatment_ids = [0, 1]
+        return U, treatment_ids
+    
 import matplotlib.pyplot as plt
 def verify_decision_robustness(model, sample_features, L_decision, lambda_cost=0.5, epsilon=0.1):
     """
@@ -463,28 +553,28 @@ def verify_decision_robustness(model, sample_features, L_decision, lambda_cost=0
     # 4.5 (可选) 可视化分布
     # ---------------------------------------------------------
     # 如果样本量大，画图看看 Margin 分布很有帮助
-    try:
-        plt.figure(figsize=(10, 4))
+    # try:
+    #     plt.figure(figsize=(10, 4))
         
-        plt.subplot(1, 2, 1)
-        plt.hist(margin, bins=50, color='skyblue', alpha=0.7, label='Margin')
-        plt.axvline(x=valid_L * epsilon, color='red', linestyle='--', label=f'Threshold (L*eps)')
-        plt.title('Decision Margin Distribution')
-        plt.xlabel('Margin |U1 - U0|')
-        plt.legend()
+    #     plt.subplot(1, 2, 1)
+    #     plt.hist(margin, bins=50, color='skyblue', alpha=0.7, label='Margin')
+    #     plt.axvline(x=valid_L * epsilon, color='red', linestyle='--', label=f'Threshold (L*eps)')
+    #     plt.title('Decision Margin Distribution')
+    #     plt.xlabel('Margin |U1 - U0|')
+    #     plt.legend()
 
-        plt.subplot(1, 2, 2)
-        plt.hist(safe_radius, bins=50, color='lightgreen', alpha=0.7, label='Safe Radius')
-        plt.axvline(x=epsilon, color='red', linestyle='--', label=f'Target Epsilon ({epsilon})')
-        plt.title('Safe Radius Distribution')
-        plt.xlabel('Radius (eps)')
-        plt.legend()
+    #     plt.subplot(1, 2, 2)
+    #     plt.hist(safe_radius, bins=50, color='lightgreen', alpha=0.7, label='Safe Radius')
+    #     plt.axvline(x=epsilon, color='red', linestyle='--', label=f'Target Epsilon ({epsilon})')
+    #     plt.title('Safe Radius Distribution')
+    #     plt.xlabel('Radius (eps)')
+    #     plt.legend()
         
-        plt.tight_layout()
-        plt.show()
-        print("[Info] 直方图已生成")
-    except Exception as e:
-        print(f"[Info] 跳过绘图: {e}")
+    #     plt.tight_layout()
+    #     plt.show()
+    #     print("[Info] 直方图已生成")
+    # except Exception as e:
+    #     print(f"[Info] 跳过绘图: {e}")
 
     return {
         "robust_ratio": robust_ratio,

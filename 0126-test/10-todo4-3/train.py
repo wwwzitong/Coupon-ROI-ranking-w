@@ -8,79 +8,7 @@ os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 import tensorflow as tf
 import random
 import numpy as np
-
-# ==================== 设置随机种子确保可复现性 ====================
-def set_seeds(seed=42):
-    """
-    设置所有随机种子以确保实验可复现
-    Args:
-        seed: 随机种子值，默认为42
-    """
-    # 设置Python随机种子
-    random.seed(seed)
-    
-    
-    # 设置NumPy随机种子
-    np.random.seed(seed)
-    
-    # 设置TensorFlow随机种子
-    tf.random.set_seed(seed)
-    
-    # 设置PYTHONHASHSEED
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    
-    print(f"已设置随机种子: {seed}")
-
-set_seeds(42)  # 你可以更改为任何固定值
-
-import sys
-import math
-import json
-import shutil
-import argparse
-import io
-#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
-
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if CODE_DIR not in sys.path:
-    sys.path.insert(0, CODE_DIR)
-
-from data_utils import *
-
 import argparse # 导入 argparse 模块
-
-
-
-# 强制UTF-8编码
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-os.environ['PYTHONIOENCODING'] = 'utf-8'
-
-# In[7]:
-
-
-# ==================== 建议添加的回调 ====================
-class EpochMetricsCallback(tf.keras.callbacks.Callback):
-    def __init__(self, log_dir):
-        super(EpochMetricsCallback, self).__init__()
-        # You can now use the log_dir, for example, to create a summary writer
-        self.writer = tf.summary.create_file_writer(os.path.join(log_dir, "custom_epoch_metrics"))
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        # Example of how you might use the writer to log metrics at the end of an epoch
-        with self.writer.as_default():
-            for metric, value in logs.items():
-                tf.summary.scalar(f"epoch_{metric}", value, step=epoch)
-        
-        # Your existing on_epoch_end logic can go here
-        print(f"\nEpoch {epoch+1} metrics: {logs}")
-
-
-# In[8]:
-
 
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
@@ -116,9 +44,84 @@ parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
 parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
 parser.add_argument('--bs', type=int, default=4096, help='batchsize')
 parser.add_argument('--Q', type=int, default=819, help='lambda_update_frequency')
+parser.add_argument('--seed', type=int, default=42, help='global random seed')
 
 
 args = parser.parse_args()
+
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(args.seed)  # 你可以更改为任何固定值
+
+import sys
+import math
+import json
+import shutil
+import argparse
+import io
+#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
+from data_utils import *
+
+
+
+
+# 强制UTF-8编码
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+# In[7]:
+
+
+# ==================== 建议添加的回调 ====================
+class EpochMetricsCallback(tf.keras.callbacks.Callback):
+    def __init__(self, log_dir):
+        super(EpochMetricsCallback, self).__init__()
+        # You can now use the log_dir, for example, to create a summary writer
+        self.writer = tf.summary.create_file_writer(os.path.join(log_dir, "custom_epoch_metrics"))
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        # Example of how you might use the writer to log metrics at the end of an epoch
+        with self.writer.as_default():
+            for metric, value in logs.items():
+                tf.summary.scalar(f"epoch_{metric}", value, step=epoch)
+        
+        # Your existing on_epoch_end logic can go here
+        print(f"\nEpoch {epoch+1} metrics: {logs}")
+
+
+# In[8]:
+
+
+
 
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name

@@ -188,7 +188,17 @@ model_paths_DFCL = [
 
     # "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_bias",
 
-    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
+    # "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
+
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed40",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed41",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed43",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed44",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed45",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed46",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed47",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed48",
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed49",
 
 
 ]
@@ -211,7 +221,7 @@ current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # ==================== 新增：Paid logit 校准（统一加常数） ====================
 # 你要加的常数：>0 抬高 paid，<0 压低 paid（加在 logit 上）
-PAID_LOGIT_BIAS = 10  # TODO: 例如 0.2 / -0.3，自行调整
+PAID_LOGIT_BIAS = 0.0  # TODO: 例如 0.2 / -0.3，自行调整
 
 def apply_logit_bias_tensor(x, bias: float):
     if bias == 0.0:

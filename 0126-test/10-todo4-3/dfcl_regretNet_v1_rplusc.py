@@ -36,7 +36,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self.global_step = tf.Variable(0, trainable=False, dtype=tf.int64, name="global_step")
 
         self.paid_logit_bias = tf.Variable(
-            0.2, trainable=False, dtype=tf.float32, name="paid_logit_bias"
+            0.0, trainable=False, dtype=tf.float32, name="paid_logit_bias"
         )
         
         # 从 fsfc.py 导入配置

@@ -29,7 +29,7 @@ CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 # from data_utils_ECLIFT import *
-from data_utils import *
+from data_utils_ECLIFT import *
 
 
 

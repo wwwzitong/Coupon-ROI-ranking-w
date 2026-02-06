@@ -37,7 +37,15 @@
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.3 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.3_loss2_rho0.005
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.7 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.7_loss2_rho0.005
 
-python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_bias
+python train.py --seed 43 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed43
+python train.py --seed 44 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed44
+python train.py --seed 45 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed45
+python train.py --seed 46 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed46
+python train.py --seed 47 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed47
+python train.py --seed 48 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed48
+python train.py --seed 49 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed49
+python train.py --seed 41 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed41
+python train.py --seed 40 --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_seed40
 
 python Evaluation.py
 
