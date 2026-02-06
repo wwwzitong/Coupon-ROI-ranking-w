@@ -183,7 +183,13 @@ model_paths_DFCL = [
     # "./model/EcomDFCL_regretNet_rplusc_Q=819_bs4096_lr1e-3_clip=5e3_tau=1.0_loss2_rho0.01",
 
     # "./model/EcomDFCL_regretNet_rplusc_Q=819_bs4096_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
-    "./model/EcomDFCL_regretNet_rplusc_ratios_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
+
+    # "./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.7_loss2_rho0.005",
+
+    # "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_bias",
+
+    "./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
+
 
 ]
 model_paths_else = [
@@ -203,6 +209,34 @@ auuc_save_path = config['auuc_save_path']
 # 生成当前时间字符串
 current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# ==================== 新增：Paid logit 校准（统一加常数） ====================
+# 你要加的常数：>0 抬高 paid，<0 压低 paid（加在 logit 上）
+PAID_LOGIT_BIAS = 10  # TODO: 例如 0.2 / -0.3，自行调整
+
+def apply_logit_bias_tensor(x, bias: float):
+    if bias == 0.0:
+        return x
+    return tf.cast(x, tf.float32) + tf.cast(bias, tf.float32)
+
+def apply_paid_logit_bias(predictions_logits: dict, bias: float) -> dict:
+    """
+    给所有 paid_* 的 logit 统一加一个常数偏置（logit 空间校准）。
+    输入 predictions_logits: model.predict(...) 的输出 dict，value 为 logit tensor/ndarray
+    返回一个新的 dict（不原地改，避免副作用）
+    """
+    if bias == 0.0:
+        return predictions_logits
+
+    biased = {}
+    for k, v in predictions_logits.items():
+        if k.startswith("paid_"):
+            # 兼容 numpy / tf.Tensor：统一转 tf.float32 再加 bias
+            v_t = tf.cast(v, tf.float32) + tf.cast(bias, tf.float32)
+            biased[k] = v_t
+        else:
+            biased[k] = v
+    return biased
+# ==================== 新增结束 ====================
 
 # ## AUCC
 
@@ -890,6 +924,10 @@ for model_path in model_paths_DFCL:
         integrated_uplift_per_sample = total_uplift_per_sample / len(ratios)
         
         pred_paid_uplift = pred_dict['paid_treatment_1'] - pred_dict['paid_treatment_0']
+        # ==================== 新增：对 paid logits 做统一校准 ====================
+        pred_paid_uplift = apply_logit_bias_tensor(pred_paid_uplift, PAID_LOGIT_BIAS)
+        # ==================== 新增结束 ====================
+
         pred_cost_uplift = pred_dict['cost_treatment_1'] - pred_dict['cost_treatment_0']
         roi_tensor = tf.where(
             pred_cost_uplift > 0,                      # 条件
@@ -968,11 +1006,11 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        # print("正在生成 Paid Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        print("正在生成 Paid Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
-        # print("正在生成 Cost Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        print("正在生成 Cost Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)

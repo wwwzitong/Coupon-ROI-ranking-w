@@ -35,6 +35,10 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self.dual_lr_scale = 1.0
         self.global_step = tf.Variable(0, trainable=False, dtype=tf.int64, name="global_step")
 
+        self.paid_logit_bias = tf.Variable(
+            0.2, trainable=False, dtype=tf.float32, name="paid_logit_bias"
+        )
+        
         # 从 fsfc.py 导入配置
         self.sparse_feature_names = SPARSE_FEATURE_NAME
         self.dense_feature_names = DENSE_FEATURE_NAME
@@ -186,6 +190,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             # name is like "paid_treatment_30_tower"
             pred_name = name.replace('_tower', '')
             logit = tower(shared_output, training=training)
+            if pred_name.startswith("paid_treatment_"):
+                logit = tf.cast(logit, tf.float32) + self.paid_logit_bias
             predictions[pred_name] = tf.reshape(logit, [-1])
                 
         self._last_shared_output = shared_output
@@ -260,8 +266,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
             
-        return decision_loss_sum / len(self.ratios)
-        # return decision_loss_sum
+        # return decision_loss_sum / len(self.ratios)
+        return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):

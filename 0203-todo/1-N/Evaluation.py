@@ -172,7 +172,7 @@ model_paths_DFCL = [
 
 
     # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.01_tau=1.2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
 
 ]
 model_paths_else = [
@@ -941,21 +941,21 @@ for model_path in model_paths_DFCL:
     
     with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
         # 打印结果DataFrame的前几行以供查验
-        print("\n评估结果DataFrame示例:")
-        print(eval_df.head())
-        eval_df['treatment'] = eval_df['treatment'].astype(int)
+        # print("\n评估结果DataFrame示例:")
+        # print(eval_df.head())
+        # eval_df['treatment'] = eval_df['treatment'].astype(int)
         
-        # 7. 计算 AUCC 并获取绘图数据
-        print("正在计算 AUCC 指标...")
-        aucc_score = strict_aucc_algorithm2(df=eval_df)
-        print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
-        aucc_score_2 = calculate_and_save_aucc(df=eval_df)
-        print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
+        # # 7. 计算 AUCC 并获取绘图数据
+        # print("正在计算 AUCC 指标...")
+        # aucc_score = strict_aucc_algorithm2(df=eval_df)
+        # print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
+        # aucc_score_2 = calculate_and_save_aucc(df=eval_df)
+        # print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
 
-        print("正在计算 AUUC 指标...")
-        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
-        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
-        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
+        # print("正在计算 AUUC 指标...")
+        # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
+        # # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
+        # plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
         # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-roi AUUC 分数为: {auuc:.6f}")
@@ -963,104 +963,104 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        # print("正在生成 Paid Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        print("正在生成 Paid Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
-        # print("正在生成 Cost Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        print("正在生成 Cost Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
-        print("正在生成 AUCC Plot (Uplift)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
+        # print("正在生成 AUCC Plot (Uplift)...")
+        # get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
         
-        print("正在生成 AUCC Plot (ROI)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
+        # print("正在生成 AUCC Plot (ROI)...")
+        # get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
         
         
         
-        # 1127Addition：
-        # --- 新增评估逻辑 ---
-        from sklearn.metrics import roc_auc_score
+        # # 1127Addition：
+        # # --- 新增评估逻辑 ---
+        # from sklearn.metrics import roc_auc_score
 
-        print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
-        # 筛选出实验组数据用于评估
-        treatment_df = eval_df[eval_df['treatment'] == 1]
+        # print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
+        # # 筛选出实验组数据用于评估
+        # treatment_df = eval_df[eval_df['treatment'] == 1]
 
-        if treatment_df.empty:
-            print("实验组无数据，跳过额外评估。")
-        else:
-            # 1. 统计模型预估值平均值和真实值平均值对比
-            print("\n模型预估值与真实值均值对比 (实验组):")
-            avg_pred_paid = treatment_df['treat_paid'].mean()
-            avg_true_paid = treatment_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
+        # if treatment_df.empty:
+        #     print("实验组无数据，跳过额外评估。")
+        # else:
+        #     # 1. 统计模型预估值平均值和真实值平均值对比
+        #     print("\n模型预估值与真实值均值对比 (实验组):")
+        #     avg_pred_paid = treatment_df['treat_paid'].mean()
+        #     avg_true_paid = treatment_df['paid'].mean()
+        #     print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-            avg_pred_cost = treatment_df['treat_cost'].mean()
-            avg_true_cost = treatment_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
+        #     avg_pred_cost = treatment_df['treat_cost'].mean()
+        #     avg_true_cost = treatment_df['cost'].mean()
+        #     print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
-            # 2. 计算并展示 paid 和 cost 的 regAUC
-            print("\n计算 Regression AUC (regAUC, 在实验组上):")
+        #     # 2. 计算并展示 paid 和 cost 的 regAUC
+        #     print("\n计算 Regression AUC (regAUC, 在实验组上):")
 
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
+        #     def calculate_reg_auc(y_true, y_pred, label_name):
+        #         # 检查真实值是否都一样，无法计算AUC
+        #         if y_true.nunique() <= 1:
+        #             print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+        #             return
 
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
+        #         # 将回归问题转化为二分类问题来计算AUC
+        #         binary_true = (y_true > y_true.median()).astype(int)
                 
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
+        #         # 检查二分后的标签是否只有一个类别
+        #         if len(np.unique(binary_true)) <= 1:
+        #             print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+        #             return
                 
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+        #         reg_auc = roc_auc_score(binary_true, y_pred)
+        #         print(f"  - {label_name} regAUC: {reg_auc:.4f}")
 
-            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
-            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
+        #     calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
+        #     calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
             
             
-        # 筛选出对照组数据用于评估
-        control_df = eval_df[eval_df['treatment'] == 0]
+        # # 筛选出对照组数据用于评估
+        # control_df = eval_df[eval_df['treatment'] == 0]
 
-        if control_df.empty:
-            print("对照组无数据，跳过额外评估。")
-        else:
-            # 1. 统计模型预估值平均值和真实值平均值对比
-            print("\n模型预估值与真实值均值对比 (对照组):")
-            avg_pred_paid = control_df['ctrl_paid'].mean()
-            avg_true_paid = control_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
+        # if control_df.empty:
+        #     print("对照组无数据，跳过额外评估。")
+        # else:
+        #     # 1. 统计模型预估值平均值和真实值平均值对比
+        #     print("\n模型预估值与真实值均值对比 (对照组):")
+        #     avg_pred_paid = control_df['ctrl_paid'].mean()
+        #     avg_true_paid = control_df['paid'].mean()
+        #     print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-            avg_pred_cost = control_df['ctrl_cost'].mean()
-            avg_true_cost = control_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
+        #     avg_pred_cost = control_df['ctrl_cost'].mean()
+        #     avg_true_cost = control_df['cost'].mean()
+        #     print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
-            # 2. 计算并展示 paid 和 cost 的 regAUC
-            print("\n计算 Regression AUC (regAUC, 在对照组上):")
+        #     # 2. 计算并展示 paid 和 cost 的 regAUC
+        #     print("\n计算 Regression AUC (regAUC, 在对照组上):")
 
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
+        #     def calculate_reg_auc(y_true, y_pred, label_name):
+        #         # 检查真实值是否都一样，无法计算AUC
+        #         if y_true.nunique() <= 1:
+        #             print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+        #             return
 
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
+        #         # 将回归问题转化为二分类问题来计算AUC
+        #         binary_true = (y_true > y_true.median()).astype(int)
                 
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
+        #         # 检查二分后的标签是否只有一个类别
+        #         if len(np.unique(binary_true)) <= 1:
+        #             print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+        #             return
                 
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+        #         reg_auc = roc_auc_score(binary_true, y_pred)
+        #         print(f"  - {label_name} regAUC: {reg_auc:.4f}")
 
-            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
-            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
-        # --- 评估逻辑结束 ---
+        #     calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
+        #     calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
+        # # --- 评估逻辑结束 ---
 
 
 # In[ ]:
@@ -1141,14 +1141,14 @@ json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
+# plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else)
 
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
 
 # 调用函数生成图像
-plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
+# plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else)
 
 
 # In[22]:

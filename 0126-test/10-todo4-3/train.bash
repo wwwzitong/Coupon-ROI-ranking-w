@@ -35,8 +35,9 @@
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005
 
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.3 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.3_loss2_rho0.005
+# python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.7 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.7_loss2_rho0.005
 
-python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 409 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_ratios_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 0.5 --Q 450 --rho 0.005 --bs 8192 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_Q=450_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005_bias
 
 python Evaluation.py
 

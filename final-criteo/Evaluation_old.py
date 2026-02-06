@@ -189,12 +189,12 @@ model_paths_DFCL = [
     # "./model/SLearner_2pos_lr3_clip=100_seed41",
     # "./model/SLearner_2pos_lr3_clip=100_seed41_run2",
 
-    "./model/SLearner_2pos_lr3_clip=100_seed44",
+    "./model/SLearner_2pos_lr3_clip=100_seed39",
 
-    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw_seed44",
-    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_seed44",
-    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_seed44",
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed44",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw_seed39",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_seed39",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_seed39",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed39",
 ]
 model_paths_else = [
 
