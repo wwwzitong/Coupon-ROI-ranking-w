@@ -13,17 +13,47 @@ import argparse
 import random
 import io
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
-from ecom_slearner_ECLIFT import SLearner, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
-
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if CODE_DIR not in sys.path:
-    sys.path.insert(0, CODE_DIR)
-from data_utils_ECLIFT import *
-
+import tensorflow as tf
 import argparse # 导入 argparse 模块
+
+# --- 1. 配置字典（替代命令行参数） ---
+config = {
+    'model_class_name': 'EcomDFCL_regretNet_rc',
+    'model_path': './model/EcomDFCL_regretNet_rc_2pll_2pos_lr3',
+    'last_model_path': '',
+    'train_data': '../data/ECLIFT_train.csv', 
+    'val_data': '../data/ECLIFT_val.csv',
+    'batch_size': 4096,
+    'num_epochs': 50,
+    'learning_rate': 0.001, # initial learning rate
+    'summary_steps': 1000,
+    'first_decay_steps': 1000,
+    'clipnorm': 5e3,
+    'max_multiplier': 1.0,
+    'scheduler': 'raw',
+    'tau': 1.0,
+    'rho': 0.1,
+}
+# --- 1b. 使用 argparse 解析命令行参数 ---
+parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
+parser.add_argument('--model_class_name', type=str, default=config['model_class_name'],
+                    help='The name of the model class to train.')
+parser.add_argument('--model_path', type=str, default=config['model_path'],
+                    help='The path to save the model and logs.')
+parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
+parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
+parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
+parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
+parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
+parser.add_argument('--bs', type=int, default=4096, help='batchsize')
+parser.add_argument('--batch_sum_mean', type=str, default='mean', help='sum/mean')
+parser.add_argument('--loss_function', type=str, default='2pll', help='The expression of decision loss function.')
+parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
+parser.add_argument('--seed', type=int, default=42, help='global random seed')
+
+args = parser.parse_args()
 
 
 # ==================== 设置随机种子确保可复现性 ====================
@@ -51,12 +81,22 @@ def set_seeds(seed=42):
     
     print(f"已设置随机种子: {seed}")
 
-set_seeds(42)  # 你可以更改为任何固定值
+set_seeds(args.seed)  # 你可以更改为任何固定值
 
 # 强制UTF-8编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
+from ecom_slearner_ECLIFT import SLearner, DENSE_FEATURE_NAME
+# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+from data_utils_ECLIFT import *
 
 # In[7]:
 
@@ -81,45 +121,6 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 # In[8]:
 
-
-# --- 1. 配置字典（替代命令行参数） ---
-config = {
-    'model_class_name': 'EcomDFCL_regretNet_rc',
-    'model_path': './model/EcomDFCL_regretNet_rc_2pll_2pos_lr3',
-    'last_model_path': '',
-    'train_data': '../data/ECLIFT_train.csv', 
-    'val_data': '../data/ECLIFT_val.csv',
-    'batch_size': 4096,
-    'num_epochs': 50,
-    'learning_rate': 0.001, # initial learning rate
-    'summary_steps': 1000,
-    'first_decay_steps': 1000,
-    'clipnorm': 5e3,
-    'max_multiplier': 1.0,
-    'scheduler': 'raw',
-    'tau': 1.0,
-    'rho': 0.1,
-}
-
-# --- 1b. 使用 argparse 解析命令行参数 ---
-parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
-parser.add_argument('--model_class_name', type=str, default=config['model_class_name'],
-                    help='The name of the model class to train.')
-parser.add_argument('--model_path', type=str, default=config['model_path'],
-                    help='The path to save the model and logs.')
-parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
-parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
-parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
-parser.add_argument('--scheduler', type=str, default='raw', help='learning rate scheduler')
-parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
-parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
-parser.add_argument('--bs', type=int, default=4096, help='batchsize')
-parser.add_argument('--batch_sum_mean', type=str, default='mean', help='sum/mean')
-parser.add_argument('--loss_function', type=str, default='2pll', help='The expression of decision loss function.')
-parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
-
-args = parser.parse_args()
 
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name

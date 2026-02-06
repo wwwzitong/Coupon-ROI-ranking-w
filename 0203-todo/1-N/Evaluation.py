@@ -172,7 +172,7 @@ model_paths_DFCL = [
 
 
     # "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.05_tau=1.2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.01_tau=1.2",
 
 ]
 model_paths_else = [

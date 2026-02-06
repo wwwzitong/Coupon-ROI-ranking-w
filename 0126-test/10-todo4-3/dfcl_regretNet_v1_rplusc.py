@@ -260,8 +260,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
             
-        # return decision_loss_sum / len(self.ratios)
-        return decision_loss_sum
+        return decision_loss_sum / len(self.ratios)
+        # return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):
@@ -345,10 +345,11 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             # 拉格朗日项: μ * g(w)
             # 在更新w时，μ被视为常数，因此停止梯度回传
+            # tf.print("mu:", self.mu)
             lambda_term = tf.stop_gradient(self.mu) * prediction_loss
 
             # 二次惩罚项: (ρ/2) * g(w)
-            penalty_term = (self.rho / 2.0) * prediction_loss
+            penalty_term = (self.rho / 2.0) * prediction_loss ** 2
 
             # 最终用于更新模型参数 w 的总损失
             model_update_loss = -decision_loss + lambda_term + penalty_term
@@ -392,7 +393,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         # 3. primal update
         self.optimizer.apply_gradients(zip(model_gradients, model_variables))
 
-        tf.print("iter=", self.global_step, "freq=", self.lambda_update_frequency, "mod=", self.global_step % self.lambda_update_frequency)
+        # tf.print("iter=", self.global_step, "freq=", self.lambda_update_frequency, "mod=", self.global_step % self.lambda_update_frequency)
 
         # 用我们自己的 step（保证每个 batch +1）
         self.global_step.assign_add(1)
@@ -416,8 +417,10 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             tf.equal(self.global_step % self.lambda_update_frequency, 0),
             self.mu.dtype
         )
+        # tf.print("flag=", flag, "mu_before=", self.mu)
         new_mu = self.mu + flag * self.rho * tf.stop_gradient(prediction_loss)
         self.mu.assign(new_mu)
+        # tf.print("mu_after=", self.mu)
 
 
 
@@ -518,7 +521,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             "cost_loss": cost_loss,
             "lambda_term": lambda_term,
             "penalty_term": penalty_term,
-            "lagrangian": self.mu,
+            # "lagrangian": self.mu,
         }
 
     def test_step(self, data):

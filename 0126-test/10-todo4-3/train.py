@@ -2,27 +2,12 @@ from __future__ import print_function, absolute_import, division
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-
-import sys
+# 设置操作确定性（可能影响性能但提高可复现性）
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 import tensorflow as tf
-import numpy as np
-import math
-import json
-import shutil
-import argparse
 import random
-import io
-#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
-# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
-
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-if CODE_DIR not in sys.path:
-    sys.path.insert(0, CODE_DIR)
-
-from data_utils import *
-
-import argparse # 导入 argparse 模块
+import numpy as np
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):
@@ -40,9 +25,6 @@ def set_seeds(seed=42):
     
     # 设置TensorFlow随机种子
     tf.random.set_seed(seed)
-    # 设置操作确定性（可能影响性能但提高可复现性）
-    os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
     
     # 设置PYTHONHASHSEED
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -50,6 +32,26 @@ def set_seeds(seed=42):
     print(f"已设置随机种子: {seed}")
 
 set_seeds(42)  # 你可以更改为任何固定值
+
+import sys
+import math
+import json
+import shutil
+import argparse
+import io
+#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+# from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
+from data_utils import *
+
+import argparse # 导入 argparse 模块
+
+
 
 # 强制UTF-8编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')

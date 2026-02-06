@@ -11,12 +11,39 @@ from __future__ import print_function, absolute_import, division
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
+# 设置操作确定性（可能影响性能但提高可复现性）
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+import tensorflow as tf
+import random
+import numpy as np
+
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
 
 import sys
 import io
-import tensorflow as tf
-import numpy as np
-import random
 import pandas as pd
 import json
 import matplotlib.pyplot as plt
@@ -86,32 +113,6 @@ def tee_output(filepath, mode="a", encoding="utf-8"):
             sys.stdout, sys.stderr = old_out, old_err
             f.close()
 
-# ==================== 设置随机种子确保可复现性 ====================
-def set_seeds(seed=42):
-    """
-    设置所有随机种子以确保实验可复现
-    Args:
-        seed: 随机种子值，默认为42
-    """
-    # 设置Python随机种子
-    random.seed(seed)
-    
-    
-    # 设置NumPy随机种子
-    np.random.seed(seed)
-    
-    # 设置TensorFlow随机种子
-    tf.random.set_seed(seed)
-    # 设置操作确定性（可能影响性能但提高可复现性）
-    os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-    
-    # 设置PYTHONHASHSEED
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    
-    print(f"已设置随机种子: {seed}")
-
-set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
     'eval_data': '../../data/criteo_test.csv',
@@ -169,10 +170,20 @@ model_paths_DFCL = [
     # "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr1e-3_clip=5e3_max=1_tau=1.0",
     # "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr5e-4_clip=5e3_max=1_tau=1.0",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr1e-4_clip=5e3_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Q=409_bs8192_lr1e-4_clip=5e3_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr5e-5_clip=5e3_tau=1.0",
-    "./model/EcomDFCL_regretNet_rplusc_wce_Q=409_bs8192_lr5e-5_clip=5e3_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr1e-4_clip=5e3_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Q=409_bs8192_lr1e-4_clip=5e3_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Q=819_bs4096_lr5e-5_clip=5e3_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_Q=409_bs8192_lr5e-5_clip=5e3_tau=1.0",
+
+    # "./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=1.0_loss2_rho0.001",
+
+    # "./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=1.0_loss2_rho0.005",
+    # "./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr2e-3_clip=5e3_tau=1.0_loss2_rho0.01",
+    # "./model/EcomDFCL_regretNet_rplusc_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.01",
+    # "./model/EcomDFCL_regretNet_rplusc_Q=819_bs4096_lr1e-3_clip=5e3_tau=1.0_loss2_rho0.01",
+
+    # "./model/EcomDFCL_regretNet_rplusc_Q=819_bs4096_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
+    "./model/EcomDFCL_regretNet_rplusc_ratios_Q=409_bs8192_lr1e-3_clip=5e3_tau=0.5_loss2_rho0.005",
 
 ]
 model_paths_else = [

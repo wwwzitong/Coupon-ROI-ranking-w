@@ -167,33 +167,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    
-    "./model/SLearner_2pos_lr3_clip=100_run2",
-
-    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw_run2",
-    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_run2",
-    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run2",
 
 ]
 model_paths_else = [
-    
-    # "./model/SLearner_2pos_lr3_clip=100",
 
-    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
-    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
-    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p",
+    "./model/SLearner_2pos_lr3_clip=100",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 ]
 
 model_name_map = {
     "./model/SLearner_2pos_lr3_clip=100": "TPM-SL",
     "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw": "DFCL-PL",
     "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw": "DFCL-MER",
-    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p": "DFCL-IFD",
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw": "CC-DFL(Ours)",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2": "DFCL-IFD",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5": "CC-DFL(Ours)",
 }
 
 # In[7]:
@@ -685,46 +676,97 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
         'qini_coefficient': float(qini_coefficient),
     }
     
-    # Step 8: 绘制图表
-    plt.figure(figsize=(12, 7))
+    # # Step 8: 绘制图表
+    # plt.figure(figsize=(12, 7))
     
-    # 绘制AUUC曲线
-    plt.plot(x_coords, y_coords, 'b-', linewidth=2.5, label=f'Uplift Model (AUUC = {auuc_score:.4f})')
+    # # 绘制AUUC曲线
+    # plt.plot(x_coords, y_coords, 'b-', linewidth=2.5, label=f'Uplift Model (AUUC = {auuc_score:.4f})')
     
-    # 绘制随机基线（对角线）
-    plt.plot([0, 1], [0, 1], 'r--', linewidth=1.5, alpha=0.7, label='Random Baseline (AUUC = 0.5)')
+    # # 绘制随机基线（对角线）
+    # plt.plot([0, 1], [0, 1], 'r--', linewidth=1.5, alpha=0.7, label='Random Baseline (AUUC = 0.5)')
     
-    # 绘制零线
-    plt.axhline(y=0, color='k', linestyle=':', linewidth=1, alpha=0.5)
+    # # 绘制零线
+    # plt.axhline(y=0, color='k', linestyle=':', linewidth=1, alpha=0.5)
     
-    # 填充曲线下面积
-    plt.fill_between(x_coords, y_coords, 0, alpha=0.2, color='blue')
+    # # 填充曲线下面积
+    # plt.fill_between(x_coords, y_coords, 0, alpha=0.2, color='blue')
     
-    # 设置图表属性
-    plt.xlabel('Population Fraction (Sorted by Uplift Score)', fontsize=12)
-    plt.ylabel('Normalized Cumulative Uplift', fontsize=12)
+    # # 设置图表属性
+    # # plt.xlabel('Population Fraction (Sorted by Uplift Score)', fontsize=12)
+    # plt.xlabel('The Count of Smaples', fontsize=12)
+    # # plt.ylabel('Normalized Cumulative Uplift', fontsize=12)
+    # plt.ylabel('Incremental Reward', fontsize=12)
     
-    title = f'{uplift_col} - AUUC Curve - {reward_col}'
-    plt.title(title, fontsize=14, fontweight='bold')
+    # title = f'{uplift_col} - AUUC Curve - {reward_col}'
+    # plt.title(title, fontsize=14, fontweight='bold')
     
-    # 添加AUUC和Qini系数信息
-    info_text = f'AUUC Score: {auuc_score:.4f}\nQini Coefficient: {qini_coefficient:.4f}\nTotal Uplift: {total_uplift:.2f}\nSample Size: {n_total}'
-    plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
-             fontsize=10, verticalalignment='top',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    # # 添加AUUC和Qini系数信息
+    # info_text = f'AUUC Score: {auuc_score:.4f}\nQini Coefficient: {qini_coefficient:.4f}\nTotal Uplift: {total_uplift:.2f}\nSample Size: {n_total}'
+    # plt.text(0.02, 0.98, info_text, transform=plt.gca().transAxes, 
+    #          fontsize=10, verticalalignment='top',
+    #          bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    plt.grid(True, alpha=0.3)
-    plt.legend(loc='upper left')
-    plt.xlim(0, 1)
-    plt.ylim(min(y_coords) - 0.05, max(y_coords) + 0.05)
+    # plt.grid(True, alpha=0.3)
+    # plt.legend(loc='upper left')
+    # plt.xlim(0, 1)
+    # plt.ylim(min(y_coords) - 0.05, max(y_coords) + 0.05)
     
-    plt.tight_layout()
-    # plt.show()
-    current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    plot_save_path = f"{model_path}/result/auuc_{reward_col}_{uplift_col}_{current_ts}.png"
-    plt.savefig(plot_save_path)
+    # plt.tight_layout()
+    # # plt.show()
+    # current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # plot_save_path = f"{model_path}/result/auuc_{reward_col}_{uplift_col}_{current_ts}.pdf"
+    # plt.savefig(plot_save_path)
 
-    plt.close()
+    # plt.close()
+
+
+    # Step 8: 绘制图表（仅调整风格，不改任何计算逻辑）
+    fig, ax = plt.subplots(figsize=(8, 6))  # 更接近示例图比例
+
+    # 主曲线：线更粗、无 marker
+    ax.plot(
+        x_coords, y_coords,
+        linewidth=2.8,
+        label='CC-DFL(Ours)'
+    )
+
+    # Random baseline：黑色虚线对角线（示例图风格）
+    ax.plot(
+        [0, 1], [0, 1],
+        linestyle='--',
+        linewidth=2.5,
+        color='black',
+        label='Random'
+    )
+
+    # 网格：淡一点
+    ax.grid(True, alpha=0.25)
+
+    # 轴标签（不改含义；你原本就是归一化 x/y）
+    # 如果你希望完全沿用你原来的文字，把下面两行改回你原来的 xlabel/ylabel 即可
+    ax.set_xlabel('The Count of Samples', fontsize=18)
+    ax.set_ylabel('Incremental Reward(ΔR)', fontsize=18)
+
+    # 刻度字体
+    ax.tick_params(axis='both', labelsize=14)
+
+    # # 范围：归一化坐标
+    # ax.set_xlim(0, 1)
+    # ax.set_ylim(0, 1)
+
+    # 图例：右下角、带框（示例图风格）
+    ax.legend(loc='lower right', frameon=True, framealpha=0.9, fontsize=16)
+
+    # 去掉标题/文本框/填充（示例图没有这些）
+    # title = f'{uplift_col} - AUUC Curve - {reward_col}'
+    # ax.set_title(title, fontsize=14, fontweight='bold')
+
+    fig.tight_layout()
+
+    current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    plot_save_path = f"{model_path}/result/auuc_{reward_col}_{uplift_col}_{current_ts}.pdf"
+    fig.savefig(plot_save_path)
+    plt.close(fig)
 
     print(results)
 
@@ -824,7 +866,7 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
     # 5. 保存图像
     # 清理模型路径以创建有效的文件名
     current_ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    plot_save_path = f"{model_path}/result/uplift_bar_{target_col}_{current_ts}.png"
+    plot_save_path = f"{model_path}/result/uplift_bar_{target_col}_{current_ts}.pdf"
     plt.savefig(plot_save_path)
 
     plt.close()  # 关闭图形，释放内存
@@ -973,11 +1015,11 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        # print("正在生成 Paid Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
+        print("正在生成 Paid Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
-        # print("正在生成 Cost Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
+        print("正在生成 Cost Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
@@ -1079,7 +1121,7 @@ import json
 import matplotlib.pyplot as plt
 from typing import Dict, Any, List, Optional
 
-def plot_aucc_from_json_old(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
+def plot_aucc_from_json_v1(json_path: str, plot_path: str = 'aucc_comparison.png', model_names: Optional[List[str]] = None):
     """
     从 JSON 文件加载一个或多个模型的 AUCC 数据并绘制对比图。
 
@@ -1146,7 +1188,7 @@ def plot_aucc_from_json_old(json_path: str, plot_path: str = 'aucc_comparison.pn
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json(
+def plot_aucc_from_json_v2(
     json_path: str,
     plot_path: str = 'aucc_comparison.png',
     model_names: Optional[List[str]] = None,
@@ -1222,16 +1264,330 @@ def plot_aucc_from_json(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
+def plot_aucc_from_json_v3(
+    json_path: str,
+    plot_path: str = 'aucc_comparison.png',
+    model_names: Optional[List[str]] = None,
+    model_name_map: Optional[Dict[str, str]] = None,
+    fallback_to_basename: bool = True,
+):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_results: Dict[str, Dict[str, Any]] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"读取或解析文件 {json_path} 时出错: {e}")
+        return
+
+    if not all_results:
+        print("JSON 文件为空或格式不正确，无法绘图。")
+        return
+
+    results_to_plot = all_results
+    if model_names:
+        results_to_plot = {k: v for k, v in all_results.items() if k in model_names}
+
+        found = set(results_to_plot.keys())
+        not_found = set(model_names) - found
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found)}")
+
+    if not results_to_plot:
+        print("没有找到可供绘制的模型数据。")
+        return
+
+    plt.figure(figsize=(10, 8))
+
+    model_name_map = model_name_map or {}
+
+    OTHER_COLORS = [
+        "#1f77b4",  # blue
+        "#2ca02c",  # green
+        "#ff7f0e",  # orange
+        "#9467bd",  # purple
+    ]
+    color_idx = 0  # 给非 ours 曲线依次分配颜色
+
+    base_lw = 2.0  # 其他模型的线宽（你也可以调）
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
+
+    for model_key, data in results_to_plot.items():
+        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
+            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
+            continue
+
+        # 图例显示名
+        display_name = model_name_map.get(model_key)
+        if not display_name:
+            display_name = Path(model_key).name if fallback_to_basename else model_key
+
+        # --- 核心：对 CC-DFL(Ours) 特殊处理 ---
+        is_highlight = (display_name == highlight_name)
+
+        if is_highlight:
+            color = "red"
+            lw = base_lw * 1.2
+            zorder = 10
+        else:
+            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
+            color_idx += 1
+            lw = base_lw
+            zorder = 1
+
+        plt.plot(
+            data['x_coords'],
+            data['y_coords'],
+            linestyle='-',
+            linewidth=lw,
+            color=color,
+            marker=None,        # 已去掉 marker
+            zorder=zorder,
+            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
+        )
+
+    # 随机线：归一化坐标下就是 y=x
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
+
+    plt.title('AUCC Curve Comparison')
+    plt.xlabel('Cumulative Cost Difference (ΔC)')
+    plt.ylabel('Cumulative Reward Difference (ΔR)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
+    plt.close()
+    print(f"AUCC 曲线对比图已保存至: {plot_path}")
+
+def plot_aucc_from_json_v4(
+    json_path: str,
+    plot_path: str = 'aucc_comparison.png',
+    model_names: Optional[List[str]] = None,
+    model_name_map: Optional[Dict[str, str]] = None,
+    fallback_to_basename: bool = True,
+):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_results: Dict[str, Dict[str, Any]] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"读取或解析文件 {json_path} 时出错: {e}")
+        return
+
+    if not all_results:
+        print("JSON 文件为空或格式不正确，无法绘图。")
+        return
+
+    model_name_map = model_name_map or {}
+
+    # ✅ 核心：按 model_names 的顺序决定绘图顺序（也决定 legend 顺序）
+    if model_names:
+        ordered_keys = [k for k in model_names if k in all_results]
+        not_found = [k for k in model_names if k not in all_results]
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
+    else:
+        # 不传 model_names 时，就按 JSON 的 key 顺序画
+        ordered_keys = list(all_results.keys())
+
+    if not ordered_keys:
+        print("没有找到可供绘制的模型数据。")
+        return
+
+    OTHER_COLORS = [
+        "#1f77b4",  # blue
+        "#2ca02c",  # green
+        "#ff7f0e",  # orange
+        "#9467bd",  # purple
+    ]
+    color_idx = 0  # 给非 ours 曲线依次分配颜色
+
+    base_lw = 2.0  # 其他模型的线宽（你也可以调）
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
+
+    for model_key in ordered_keys:
+        data = all_results.get(model_key, {})
+        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
+            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
+            continue
+
+        # 图例显示名
+        display_name = model_name_map.get(model_key)
+        if not display_name:
+            display_name = Path(model_key).name if fallback_to_basename else model_key
+
+        # --- 核心：对 CC-DFL(Ours) 特殊处理 ---
+        is_highlight = (display_name == highlight_name)
+
+        if is_highlight:
+            color = "red"
+            lw = base_lw * 1.2
+            zorder = 10
+        else:
+            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
+            color_idx += 1
+            lw = base_lw
+            zorder = 1
+
+        plt.plot(
+            data['x_coords'],
+            data['y_coords'],
+            linestyle='-',
+            linewidth=lw,
+            color=color,
+            marker=None,        # 已去掉 marker
+            zorder=zorder,
+            label=f'{display_name}'
+        )
+
+    # 随机线：归一化坐标下就是 y=x
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
+
+    plt.title('AUCC Curve Comparison')
+    plt.xlabel('Cumulative Cost Difference (ΔC)')
+    plt.ylabel('Cumulative Reward Difference (ΔR)')
+    plt.legend()
+    plt.grid(True)
+
+    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
+    plt.close()
+    print(f"AUCC 曲线对比图已保存至: {plot_path}")
+
+def plot_aucc_from_json(
+    json_path: str,
+    plot_path: str = 'aucc_comparison.pdf',
+    model_names: Optional[List[str]] = None,
+    model_name_map: Optional[Dict[str, str]] = None,
+    fallback_to_basename: bool = True,
+):
+    import json
+    from pathlib import Path
+    import matplotlib.pyplot as plt
+    from typing import Any, Dict, List, Optional
+
+    # ====== ✅ 统一控制字体大小（比原 legend 更大） ======
+    legend_fs = 16          # 图例字号（你觉得还不够就继续加到 18/20）
+    axis_label_fs = legend_fs   # 横纵轴文字和图例一样大
+    tick_fs = legend_fs        # 刻度数字也调到同一大小
+    # ================================================
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            all_results: Dict[str, Dict[str, Any]] = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"读取或解析文件 {json_path} 时出错: {e}")
+        return
+
+    if not all_results:
+        print("JSON 文件为空或格式不正确，无法绘图。")
+        return
+
+    model_name_map = model_name_map or {}
+
+    # ✅ 按 model_names 的顺序决定绘图顺序（也决定 legend 顺序）
+    if model_names:
+        ordered_keys = [k for k in model_names if k in all_results]
+        not_found = [k for k in model_names if k not in all_results]
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
+    else:
+        ordered_keys = list(all_results.keys())
+
+    if not ordered_keys:
+        print("没有找到可供绘制的模型数据。")
+        return
+
+    # （可选）PDF 导出时常用设置：字体嵌入，避免投稿时字体替换
+    plt.rcParams['pdf.fonttype'] = 42
+    plt.rcParams['ps.fonttype'] = 42
+
+    # （可选）全局字体大小也一并设置（避免局部漏掉）
+    plt.rcParams.update({
+        "font.size": legend_fs,
+        "axes.labelsize": axis_label_fs,
+        "xtick.labelsize": tick_fs,
+        "ytick.labelsize": tick_fs,
+        "legend.fontsize": legend_fs,
+    })
+
+    OTHER_COLORS = [
+        "#1f77b4",  # blue
+        "#2ca02c",  # green
+        "#ff7f0e",  # orange
+        "#9467bd",  # purple
+    ]
+    color_idx = 0
+
+    base_lw = 2.0
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
+
+    # ✅ 建议配合字号变大稍微放大画布
+    plt.figure(figsize=(7.2, 5.4))
+
+    for model_key in ordered_keys:
+        data = all_results.get(model_key, {})
+        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
+            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
+            continue
+
+        display_name = model_name_map.get(model_key)
+        if not display_name:
+            display_name = Path(model_key).name if fallback_to_basename else model_key
+
+        is_highlight = (display_name == highlight_name)
+
+        if is_highlight:
+            color = "red"
+            lw = base_lw * 1.2
+            zorder = 10
+        else:
+            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
+            color_idx += 1
+            lw = base_lw
+            zorder = 1
+
+        plt.plot(
+            data['x_coords'],
+            data['y_coords'],
+            linestyle='-',
+            linewidth=lw,
+            color=color,
+            marker=None,
+            zorder=zorder,
+            label=display_name
+        )
+
+    # 随机线：归一化坐标下就是 y=x
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random')
+
+    # ✅ 去掉标题（不再设置 plt.title）
+    # plt.title('AUCC Curve Comparison')  # 删除/注释
+
+    # ✅ 横纵轴文字与图例一样大（由 rcParams 控制；这里写也行）
+    plt.xlabel('Incremental Cost(ΔC)', fontsize=axis_label_fs)
+    plt.ylabel('Incremental Reward(ΔR)', fontsize=axis_label_fs)
+
+    # ✅ tick 字号与图例一致
+    plt.xticks(fontsize=tick_fs)
+    plt.yticks(fontsize=tick_fs)
+
+    # ✅ 图例字号更大，并可调位置/列数避免遮挡
+    plt.legend(fontsize=legend_fs, frameon=True)
+
+    plt.grid(True, alpha=0.3)
+
+    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
+    plt.close()
+    print(f"AUCC 曲线对比图已保存至: {plot_path}")
+
+
 #  'result_aucc.json'
 json_file_path = aucc_save_path
-output_image_path = f'result/aucc_curves_{current_time}.png'
+output_image_path = f'result/aucc_curves_{current_time}.pdf'
 
 # 调用函数生成图像
 plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
 
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
-output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.png'
+output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.pdf'
 
 # 调用函数生成图像
 plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)

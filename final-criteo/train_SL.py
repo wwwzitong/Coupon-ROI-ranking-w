@@ -1,30 +1,46 @@
 from __future__ import print_function, absolute_import, division
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
+# 设置操作确定性（可能影响性能但提高可复现性）
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+
 import tensorflow as tf
 import argparse
 import random
 # from tensorflow import keras
 import numpy as np
-#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from ecom_slearner import SLearner
-
-import os
 import sys
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if CODE_DIR not in sys.path:
-    sys.path.insert(0, CODE_DIR)
-
-from data_utils import *
-
-# from ecom_dfcl_copy_0926 import EcomDFCL_re
-# from ecom_drm import EcomDRM19
-# from ecom_dfl import EcomDFL
-# from ecom_dfcl_gradnorm import EcomDFCL_gradnorm
-# from ecom_slearner import EcomDFCL_only_pl
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # 禁用所有 GPU，自然不会加载 CUDA。
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 只显示错误信息（隐藏 INFO 和 WARNING）
-
 import io
+
+# --- 1. 配置字典（替代命令行参数） ---
+config = {
+    'model_class_name': 'SLearner',
+    'model_path': './model/SLearner_2pos_lr3_alpha=0.1',
+    'last_model_path': '',
+    'train_data': '../data/criteo_train.csv', 
+    'val_data': '../data/criteo_val.csv',
+    'batch_size': 256,
+    'num_epochs': 50,
+    'learning_rate': 0.001,
+    'summary_steps': 1000,
+    'clipnorm': 5e3,
+    'first_decay_steps': 1000,
+}
+
+parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
+parser.add_argument('--model_class_name', type=str, default=config['model_class_name'],
+                    help='The name of the model class to train.')
+parser.add_argument('--model_path', type=str, default=config['model_path'],
+                    help='The path to save the model and logs.')
+parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
+parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+parser.add_argument('--seed', type=int, default=42, help='global random seed')
+
+
+args = parser.parse_args()
+
 
 # ==================== 设置随机种子确保可复现性 ====================
 def set_seeds(seed=42):
@@ -51,7 +67,22 @@ def set_seeds(seed=42):
     
     print(f"已设置随机种子: {seed}")
 
-set_seeds(42)  # 你可以更改为任何固定值
+set_seeds(args.seed)  # 你可以更改为任何固定值
+
+#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+from ecom_slearner import SLearner
+
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+
+from data_utils import *
+
+# from ecom_dfcl_copy_0926 import EcomDFCL_re
+# from ecom_drm import EcomDRM19
+# from ecom_dfl import EcomDFL
+# from ecom_dfcl_gradnorm import EcomDFCL_gradnorm
+# from ecom_slearner import EcomDFCL_only_pl
 
 # 强制UTF-8编码
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -80,33 +111,6 @@ class EpochMetricsCallback(tf.keras.callbacks.Callback):
 
 
 # In[8]:
-
-
-# --- 1. 配置字典（替代命令行参数） ---
-config = {
-    'model_class_name': 'SLearner',
-    'model_path': './model/SLearner_2pos_lr3_alpha=0.1',
-    'last_model_path': '',
-    'train_data': '../data/criteo_train.csv', 
-    'val_data': '../data/criteo_val.csv',
-    'batch_size': 256,
-    'num_epochs': 50,
-    'learning_rate': 0.001,
-    'summary_steps': 1000,
-    'clipnorm': 5e3,
-    'first_decay_steps': 1000,
-}
-
-parser = argparse.ArgumentParser(description='Train a model for Criteo dataset.')
-parser.add_argument('--model_class_name', type=str, default=config['model_class_name'],
-                    help='The name of the model class to train.')
-parser.add_argument('--model_path', type=str, default=config['model_path'],
-                    help='The path to save the model and logs.')
-parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
-parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-
-
-args = parser.parse_args()
 
 # 使用命令行参数更新 config 字典
 config['model_class_name'] = args.model_class_name

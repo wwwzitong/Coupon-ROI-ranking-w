@@ -16,7 +16,7 @@
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 2.5 --bs 4096 --max_multiplier 0.1 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_Nt_bs4096_lr1e-3_clip=5e3_max=0.1_tau=2.5
 
 # python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.2 --bs 4096 --max_multiplier 0.1 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.1_tau=1.2_run2
-python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.2 --bs 4096 --max_multiplier 0.05 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.05_tau=1.2
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.2 --bs 4096 --max_multiplier 0.01 --lr 1e-3 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_Nt_ratios_bs4096_lr1e-3_clip=5e3_max=0.01_tau=1.2
 
 python Evaluation.py
 
