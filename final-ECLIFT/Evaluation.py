@@ -174,18 +174,18 @@ model_paths_DFCL = [
     # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44",
     # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44",
     
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 ]
 model_paths_else = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
+    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 ]
 
 model_name_map = {
-    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3": "TPM-SL",
+    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3": "MTP",
     "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10": "DFCL-PL",
     "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5": "DFCL-MER",
     "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100": "DFCL-IFD",
@@ -1571,14 +1571,14 @@ json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.pdf'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
+plot_aucc_from_json(json_file_path, output_image_path, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
 
 #  'result_aucc_2.json'
 json_file_path_2 = 'result/result_aucc_v2.json'
 output_image_path_2 = f'result/aucc_curves_ByteDance_{current_time}.pdf'
 
 # 调用函数生成图像
-# plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
+plot_aucc_from_json(json_file_path_2, output_image_path_2, model_names = model_paths_DFCL + model_paths_else, model_name_map=model_name_map)
 
 
 # In[22]:

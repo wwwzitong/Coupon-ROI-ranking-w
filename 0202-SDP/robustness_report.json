@@ -1,5 +1,5 @@
 {
-  "model_path": "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
+  "model_path": "../final-criteo/model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
   "config": {
     "epsilon": 0.1,
     "lambda_cost": 0.5,
@@ -8,19 +8,8 @@
       "cost"
     ]
   },
-  "lipschitz_metrics": {
-    "L_shared": 0.00442022603463585,
-    "L_decision_theoretical": 0.0006008706604328867,
-    "L_empirical": 59.95368997239293,
-    "tower_details": {
-      "paid_treatment_0_tower": 0.000201597602022824,
-      "paid_treatment_1_tower": 0.00019630303199864895,
-      "cost_treatment_0_tower": 0.00020994241565288783,
-      "cost_treatment_1_tower": 0.00019599763716993972
-    }
-  },
   "robustness_metrics": {
-    "robust_ratio": 1.0,
-    "mean_safe_radius": 22597.78515625
+    "robust_ratio": 0.954833984375,
+    "mean_safe_radius": 0.28024351596832275
   }
 }

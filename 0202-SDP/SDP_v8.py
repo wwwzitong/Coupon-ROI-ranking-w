@@ -180,205 +180,7 @@ def _add_delta(x1: Any, delta: Any) -> Any:
         return x
 
 
-def empirical_lipschitz_estimate_old_old(
-    model: tf.keras.Model,
-    x_batch: Any,
-    n_samples: int = 1000,
-    epsilon: float = 0.01,
-    seed: int = 1234,
-) -> float:
-    """
-    通过随机扰动估计经验 Lipschitz 常数（L2 输入扰动，L2 输出差异）。
-    - 支持 x_batch 为 np.ndarray / tf.Tensor
-    - 支持 x_batch 为 dict[str, np.ndarray/tf.Tensor]（常见于多输入模型）
-    - 对非浮点输入（如 sparse id int）默认不扰动，避免输入非法
-
-    输出差异使用 RobustnessSDP.compute_utilities_from_predictions() 得到的 U（效用矩阵），
-    然后计算 ||U(x)-U(x+delta)||_2 / ||delta||_2 的最大值。
-    """
-    x_batch_np = _as_numpy_features(x_batch)
-
-    # batch size
-    if isinstance(x_batch_np, dict):
-        any_key = next(iter(x_batch_np.keys()))
-        B = int(x_batch_np[any_key].shape[0])
-    else:
-        B = int(np.asarray(x_batch_np).shape[0])
-
-    rng = np.random.default_rng(seed)
-    max_ratio = 0.0
-
-    for _ in range(int(n_samples)):
-        idx = int(rng.integers(low=0, high=B))
-        x1 = _slice_one(x_batch_np, idx)
-
-        # random direction (same structure as x1)
-        delta = _randn_like_features(x1, rng)
-        delta = _scale_delta_to_epsilon(delta, float(epsilon))
-
-        x2 = _add_delta(x1, delta)
-
-        # forward (training=False)
-        pred1 = model(x1, training=False)
-        pred2 = model(x2, training=False)
-
-        # utilities (U: (1,2) or (1,K))
-        u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
-        u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
-
-        output_diff = float(np.linalg.norm((u1 - u2).reshape(-1).astype(np.float64)))
-        input_diff = float(_l2_norm_features(delta))
-
-        if input_diff > 0:
-            ratio = output_diff / input_diff
-            if ratio > max_ratio:
-                max_ratio = ratio
-
-    return float(max_ratio)
-
-import tensorflow as tf
-
 def empirical_lipschitz_estimate_old(
-    model: tf.keras.Model,
-    x_batch: Any,
-    n_samples: int = 1000,
-    epsilon: float = 0.01,
-    seed: int = 1234,
-) -> float:
-    """
-    用“最坏方向”（梯度方向 + L2 归一化）替代随机方向，估计经验 Lipschitz 常数。
-    仅扰动 dict 输入中的 dense keys: f0..f11，其它输入保持不变（避免 int/sparse 非法扰动）。
-    """
-    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
-
-    x_batch_np = _as_numpy_features(x_batch)
-
-    # batch size
-    if isinstance(x_batch_np, dict):
-        any_key = next(iter(x_batch_np.keys()))
-        B = int(x_batch_np[any_key].shape[0])
-    else:
-        B = int(np.asarray(x_batch_np).shape[0])
-
-    rng = np.random.default_rng(seed)
-    max_ratio = 0.0
-
-    def _to_tf(x):
-        return x if isinstance(x, tf.Tensor) else tf.convert_to_tensor(x)
-
-    for _ in range(int(n_samples)):
-        idx = int(rng.integers(low=0, high=B))
-        x1_np = _slice_one(x_batch_np, idx)  # 单样本（结构同原来）
-
-        # ---------- dict 输入：只扰动 f0..f11 ----------
-        if isinstance(x1_np, dict):
-            x1_tf = {k: _to_tf(v) for k, v in x1_np.items()}
-
-            # 固定不扰动的输入（含 sparse/int 等）
-            fixed_inputs = {}
-            # 需要求梯度的 dense variables（只包含 f0..f11 中存在且为浮点的）
-            var_map = {}
-
-            for k, v in x1_tf.items():
-                if (k in dense_keys) and v.dtype.is_floating:
-                    var_map[k] = tf.Variable(tf.cast(v, tf.float32))  # (1, ...)
-                else:
-                    fixed_inputs[k] = v
-
-            if isinstance(x1_np, dict):
-                print("present keys:", [k for k in x1_np.keys() if k.startswith("f")][:20])
-                print("f dtype:", {k: x1_tf[k].dtype.name for k in dense_keys if k in x1_tf})
-                print("var_map keys:", list(var_map.keys()))
-
-            # 如果这条样本没有任何可扰动 dense key，跳过
-            if len(var_map) == 0:
-                continue
-
-            # 1) 计算梯度方向（最大化 sum(U)）
-            with tf.GradientTape() as tape:
-                for v in var_map.values():
-                    tape.watch(v)
-
-                inputs_for_grad = {**fixed_inputs, **var_map}
-                pred1 = model(inputs_for_grad, training=False)
-                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
-                target = tf.reduce_sum(u1)
-
-            grads = tape.gradient(target, list(var_map.values()))
-
-            # 2) 全局 L2 归一化（把所有 f1..f11 的梯度拼起来算 norm）
-            flat_grads = []
-            for g in grads:
-                if g is None:
-                    flat_grads.append(tf.zeros([1, 0], dtype=tf.float32))
-                else:
-                    flat_grads.append(tf.reshape(g, [1, -1]))
-            concat_g = tf.concat(flat_grads, axis=1) if flat_grads else tf.zeros([1, 0], tf.float32)
-            g_norm = tf.norm(concat_g, axis=1, keepdims=True) + 1e-8  # (1,1)
-
-            print("grad None flags:", [g is None for g in grads])
-            print("grad norms:", [0.0 if g is None else float(tf.norm(g).numpy()) for g in grads])
-            print("global g_norm:", float(g_norm.numpy()[0,0]))
-
-            # 3) 构造 delta（每个 key 的梯度 / 全局norm * epsilon）
-            delta_map = {}
-            for (k, v), g in zip(var_map.items(), grads):
-                if g is None:
-                    delta_map[k] = tf.zeros_like(v)
-                else:
-                    delta_map[k] = (g / g_norm) * float(epsilon)
-
-            # 4) 施加扰动并第二次前向
-            inputs_perturbed = {**fixed_inputs, **{k: (var_map[k] + delta_map[k]) for k in var_map.keys()}}
-            pred2 = model(inputs_perturbed, training=False)
-            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
-
-            print("u1:", u1.numpy().reshape(-1)[:10])
-            print("u2:", u2.numpy().reshape(-1)[:10])
-            print("max|u1-u2|:", float(tf.reduce_max(tf.abs(u1-u2)).numpy()))
-
-            # 5) ratio
-            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
-
-            flat_deltas = [tf.reshape(delta_map[k], [1, -1]) for k in delta_map.keys()]
-            concat_d = tf.concat(flat_deltas, axis=1) if flat_deltas else tf.zeros([1, 0], tf.float32)
-            input_diff = float(tf.norm(concat_d, axis=1).numpy()[0])
-
-        # ---------- 非 dict 输入：保持原逻辑（只对浮点扰动） ----------
-        else:
-            x1_tf = _to_tf(x1_np)
-            if not x1_tf.dtype.is_floating:
-                continue
-
-            x_var = tf.Variable(tf.cast(x1_tf, tf.float32))
-
-            with tf.GradientTape() as tape:
-                tape.watch(x_var)
-                pred1 = model(x_var, training=False)
-                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
-                target = tf.reduce_sum(u1)
-
-            g = tape.gradient(target, x_var)
-            if g is None:
-                continue
-
-            g_norm = tf.norm(tf.reshape(g, [1, -1]), axis=1, keepdims=True) + 1e-8
-            delta = (g / g_norm) * float(epsilon)
-
-            pred2 = model(x_var + delta, training=False)
-            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
-
-            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
-            input_diff = float(tf.norm(tf.reshape(delta, [-1])).numpy())
-
-        if input_diff > 0:
-            ratio = output_diff / input_diff
-            if ratio > max_ratio:
-                max_ratio = ratio
-
-    return float(max_ratio)
-
-def empirical_lipschitz_estimate(
     model: tf.keras.Model,
     x_batch: Any,
     n_samples: int = 1000,
@@ -522,6 +324,547 @@ def empirical_lipschitz_estimate(
             input_diff = float(tf.norm(tf.reshape(delta, [-1])).numpy())
 
         if input_diff > 0:
+            ratio = output_diff / input_diff
+            if ratio > max_ratio:
+                max_ratio = ratio
+
+    return float(max_ratio)
+
+def empirical_lipschitz_estimate_v1(
+    model: tf.keras.Model,
+    x_batch: Any,
+    n_samples: int = 1000,
+    epsilon: float = 0.01,
+    seed: int = 1234,
+) -> float:
+    """
+    修改版：每个 feature 的真正扰动数值为 epsilon * 标准差 (std)。
+    """
+    dense_keys = [f"f{i}" for i in range(0, 12)]
+    force_1d_keys = ["exposure", "treatment"] + dense_keys
+
+    x_batch_np = _as_numpy_features(x_batch)
+
+    # 1. 新增：计算每个 feature 的标准差 (std)
+    # 对 dict 输入中的每个 dense key 分别计算 std
+    feature_stds = {}
+    if isinstance(x_batch_np, dict):
+        for k in dense_keys:
+            if k in x_batch_np:
+                # 计算该特征在 batch 上的标准差，保持 shape 兼容 (1,) 或 ()
+                std_val = np.std(x_batch_np[k], axis=0, keepdims=True)
+                # 防止 std 为 0 导致 delta 消失，设置最小值为 1e-8
+                feature_stds[k] = tf.cast(tf.maximum(std_val, 1e-8), tf.float32)
+
+    # batch size 获取
+    if isinstance(x_batch_np, dict):
+        any_key = next(iter(x_batch_np.keys()))
+        B = int(x_batch_np[any_key].shape[0])
+    else:
+        B = int(np.asarray(x_batch_np).shape[0])
+        # 非 dict 情况下计算全局或按列 std
+        x_std = np.std(x_batch_np, axis=0, keepdims=True)
+        feature_stds_plain = tf.cast(tf.maximum(x_std, 1e-8), tf.float32)
+
+    rng = np.random.default_rng(seed)
+    max_ratio = 0.0
+
+    def _to_tf(x):
+        return x if isinstance(x, tf.Tensor) else tf.convert_to_tensor(x)
+
+    for _ in range(int(n_samples)):
+        idx = int(rng.integers(low=0, high=B))
+        x1_np = _slice_one(x_batch_np, idx)
+
+        if isinstance(x1_np, dict):
+            x1_tf = {k: _to_tf(v) for k, v in x1_np.items()}
+            fixed_inputs: Dict[str, tf.Tensor] = {}
+            var_map: Dict[str, tf.Variable] = {}
+
+            for k, v in x1_tf.items():
+                t = tf.convert_to_tensor(v)
+                if k in force_1d_keys:
+                    t = tf.cast(t, tf.float32)
+                    t = _ensure_1d_like_savedmodel(t)
+                if k in dense_keys:
+                    var_map[k] = tf.Variable(t)
+                else:
+                    fixed_inputs[k] = t
+
+            if len(var_map) == 0: continue
+
+            with tf.GradientTape() as tape:
+                for v in var_map.values(): tape.watch(v)
+                inputs_for_grad = _normalize_inputs_for_savedmodel_signature({**fixed_inputs, **var_map}, force_1d_keys)
+                pred1 = model(inputs_for_grad, training=False)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+                target = tf.reduce_sum(u1)
+
+            grads = tape.gradient(target, list(var_map.values()))
+
+            # 2. 修改：构造 delta 时乘以 std
+            delta_map: Dict[str, tf.Tensor] = {}
+            flat_gs = [tf.reshape(tf.cast(g, tf.float32), [1, -1]) for g in grads if g is not None]
+            concat_g = tf.concat(flat_gs, axis=1) if flat_gs else tf.zeros([1, 0])
+            g_norm = tf.norm(concat_g) + 1e-8
+
+            for (k, v), g in zip(var_map.items(), grads):
+                if g is None:
+                    delta_map[k] = tf.zeros_like(v)
+                else:
+                    # 核心逻辑：(梯度方向) * epsilon * std
+                    direction = tf.cast(g, tf.float32) / g_norm
+                    # 这里的 feature_stds[k] 对应当前 feature 的 std
+                    delta_map[k] = direction * float(epsilon) * feature_stds[k]
+                    delta_map[k] = tf.reshape(delta_map[k], tf.shape(v))
+
+            inputs_perturbed = _normalize_inputs_for_savedmodel_signature(
+                {**fixed_inputs, **{k: (var_map[k] + delta_map[k]) for k in var_map.keys()}}, 
+                force_1d_keys
+            )
+            pred2 = model(inputs_perturbed, training=False)
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+
+            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+            # 计算实际输入的 L2 norm 差异用于 ratio
+            flat_ds = [tf.reshape(delta_map[k], [1, -1]) for k in delta_map.keys()]
+            input_diff = float(tf.norm(tf.concat(flat_ds, axis=1)).numpy())
+
+        else:
+            # 非 dict 逻辑同理
+            x1_tf = tf.cast(_to_tf(x1_np), tf.float32)
+            x_var = tf.Variable(x1_tf)
+            with tf.GradientTape() as tape:
+                tape.watch(x_var)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(model(x_var, training=False))
+                target = tf.reduce_sum(u1)
+            g = tape.gradient(target, x_var)
+            if g is None: continue
+            g_norm = tf.norm(g) + 1e-8
+            # 乘以 std
+            delta = (g / g_norm) * float(epsilon) * feature_stds_plain
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(model(x_var + delta, training=False))
+            output_diff = float(tf.norm(u1 - u2).numpy())
+            input_diff = float(tf.norm(delta).numpy())
+
+        if input_diff > 0:
+            max_ratio = max(max_ratio, output_diff / input_diff)
+
+    return float(max_ratio)
+
+def empirical_lipschitz_estimate_v2(
+    model: tf.keras.Model,
+    x_batch: Any,
+    n_samples: int = 1000,
+    epsilon: float = 0.01,
+    seed: int = 1234,
+) -> float:
+    """
+    修改版：在“按 std 缩放后的空间”里找最陡方向并归一化。
+
+    具体做法：
+      - 对每个 dense feature 计算 std（最小 1e-8）
+      - 计算梯度 g
+      - 构造 g_scaled = g * std
+      - 用 ||concat(g_scaled)|| 归一化：delta = epsilon * g_scaled / (||g_scaled|| + 1e-8)
+      - 返回 max ||u(x)-u(x+delta)|| / ||delta||
+    """
+    dense_keys = [f"f{i}" for i in range(0, 12)]
+    force_1d_keys = ["exposure", "treatment"] + dense_keys
+
+    x_batch_np = _as_numpy_features(x_batch)
+
+    # 1) 计算 std（dict: 每个 dense key；non-dict: 按列）
+    feature_stds: Dict[str, tf.Tensor] = {}
+    if isinstance(x_batch_np, dict):
+        for k in dense_keys:
+            if k in x_batch_np:
+                std_val = np.std(x_batch_np[k], axis=0, keepdims=True)
+                # 防止 std 为 0
+                std_val = np.maximum(std_val, 1e-8)
+                feature_stds[k] = tf.cast(std_val, tf.float32)
+
+    # batch size
+    if isinstance(x_batch_np, dict):
+        any_key = next(iter(x_batch_np.keys()))
+        B = int(x_batch_np[any_key].shape[0])
+    else:
+        B = int(np.asarray(x_batch_np).shape[0])
+        x_std = np.std(x_batch_np, axis=0, keepdims=True)
+        x_std = np.maximum(x_std, 1e-8)
+        feature_stds_plain = tf.cast(x_std, tf.float32)
+
+    rng = np.random.default_rng(seed)
+    max_ratio = 0.0
+
+    def _to_tf(x):
+        return x if isinstance(x, tf.Tensor) else tf.convert_to_tensor(x)
+
+    for _ in range(int(n_samples)):
+        idx = int(rng.integers(low=0, high=B))
+        x1_np = _slice_one(x_batch_np, idx)
+
+        x1_tf = {k: _to_tf(v) for k, v in x1_np.items()}
+        fixed_inputs: Dict[str, tf.Tensor] = {}
+        var_map: Dict[str, tf.Variable] = {}
+
+        for k, v in x1_tf.items():
+            t = tf.convert_to_tensor(v)
+            if k in force_1d_keys:
+                t = tf.cast(t, tf.float32)
+                t = _ensure_1d_like_savedmodel(t)
+            if k in dense_keys:
+                var_map[k] = tf.Variable(t)
+            else:
+                fixed_inputs[k] = t
+
+        if len(var_map) == 0:
+            continue
+
+        with tf.GradientTape() as tape:
+            for v in var_map.values():
+                tape.watch(v)
+
+            inputs_for_grad = _normalize_inputs_for_savedmodel_signature(
+                {**fixed_inputs, **var_map}, force_1d_keys
+            )
+            pred1 = model(inputs_for_grad, training=False)
+            u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+            target = tf.reduce_sum(u1)
+
+        grads = tape.gradient(target, list(var_map.values()))
+
+        # 2) 核心修改：在 std 缩放空间里找最陡方向并归一化
+        delta_map: Dict[str, tf.Tensor] = {}
+
+        # (a) 先构造 g_scaled = g * std，并拼起来求全局范数
+        g_scaled_list = []
+        g_scaled_by_key: Dict[str, tf.Tensor] = {}
+
+        for (k, v), g in zip(var_map.items(), grads):
+            if g is None:
+                continue
+
+            g_f32 = tf.cast(g, tf.float32)
+
+            # std 缺失时默认 1（避免 KeyError）
+            std_k = feature_stds.get(k, None)
+            if std_k is None:
+                std_k = tf.ones_like(g_f32, dtype=tf.float32)
+            else:
+                std_k = tf.cast(std_k, tf.float32)
+                # 对齐 shape，避免隐式广播改变方向
+                std_k = tf.broadcast_to(std_k, tf.shape(g_f32))
+
+            g_scaled = g_f32 * std_k
+            g_scaled_by_key[k] = g_scaled
+            g_scaled_list.append(tf.reshape(g_scaled, [1, -1]))
+
+        concat_g_scaled = (
+            tf.concat(g_scaled_list, axis=1)
+            if g_scaled_list
+            else tf.zeros([1, 0], tf.float32)
+        )
+        g_scaled_norm = tf.norm(concat_g_scaled) + 1e-8
+
+        # (b) 用 g_scaled_norm 归一化得到 delta
+        for (k, v), g in zip(var_map.items(), grads):
+            if g is None:
+                delta_map[k] = tf.zeros_like(v)
+            else:
+                g_scaled = g_scaled_by_key[k]
+                delta = (float(epsilon) * g_scaled) / g_scaled_norm
+                delta_map[k] = tf.reshape(delta, tf.shape(v))
+
+        inputs_perturbed = _normalize_inputs_for_savedmodel_signature(
+            {**fixed_inputs, **{k: (var_map[k] + delta_map[k]) for k in var_map.keys()}},
+            force_1d_keys,
+        )
+        pred2 = model(inputs_perturbed, training=False)
+        u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+
+        output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+
+        flat_ds = [tf.reshape(delta_map[k], [1, -1]) for k in delta_map.keys()]
+        input_diff = float(tf.norm(tf.concat(flat_ds, axis=1)).numpy()) if flat_ds else 0.0
+
+        if input_diff > 0:
+            max_ratio = max(max_ratio, output_diff / input_diff)
+
+    return float(max_ratio)
+
+import tensorflow as tf
+import numpy as np
+from typing import Any
+
+        
+def empirical_lipschitz_estimate_v3(
+    model: tf.keras.Model,
+    x_batch: Any,
+    n_samples: int = 1000,
+    epsilon: float = 0.01, # 此时作为标准差的倍数系数
+    seed: int = 1234,
+) -> float:
+    """
+    结合标准差（Sigma）和梯度方向估计经验 Lipschitz 常数。
+    扰动预算 Budget = || epsilon * sigma_vec ||_2
+    """
+    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    force_1d_keys = ["exposure", "treatment"] + dense_keys
+
+    x_batch_np = _as_numpy_features(x_batch)
+
+    # --- 新增：计算联合分布的标准差逻辑 ---
+    # 提取所有 dense_keys 的数据并拼接，计算每个维度的 std
+    if isinstance(x_batch_np, dict):
+        # 假设 x_batch_np 中包含 f0..f11，形状均为 (B,) 或 (B, 1)
+        # 统一转成 (B, 1) 后水平拼接
+        dense_list = []
+        for k in dense_keys:
+            feat = np.asarray(x_batch_np[k]).reshape(-1, 1)
+            dense_list.append(feat)
+        combined_dense = np.concatenate(dense_list, axis=1) # Shape: (B, 12)
+        B = combined_dense.shape[0]
+        # 计算每个特征的标准差，加上 epsilon 防止 0
+        sigma_vec = np.std(combined_dense, axis=0) + 1e-6
+    else:
+        # 非 dict 情况，假设输入本身就是 dense matrix
+        B = int(np.asarray(x_batch_np).shape[0])
+        sigma_vec = np.std(x_batch_np, axis=0) + 1e-6
+
+    # 计算全局 L2 扰动预算 (Budget)
+    # perturbation_budget = || epsilon * sigma_vec ||_2
+    perturbation_budget = float(np.linalg.norm(epsilon * sigma_vec))
+    # ------------------------------------
+
+    rng = np.random.default_rng(seed)
+    max_ratio = 0.0
+
+    def _to_tf(x):
+        return x if isinstance(x, tf.Tensor) else tf.convert_to_tensor(x)
+
+    for _ in range(int(n_samples)):
+        idx = int(rng.integers(low=0, high=B))
+        x1_np = _slice_one(x_batch_np, idx)
+
+        if isinstance(x1_np, dict):
+            x1_tf = {k: _to_tf(v) for k, v in x1_np.items()}
+            fixed_inputs: Dict[str, tf.Tensor] = {}
+            var_map: Dict[str, tf.Variable] = {}
+
+            for k, v in x1_tf.items():
+                t = tf.cast(tf.convert_to_tensor(v), tf.float32)
+                if k in force_1d_keys:
+                    t = _ensure_1d_like_savedmodel(t)
+                
+                if k in dense_keys:
+                    var_map[k] = tf.Variable(t)
+                else:
+                    fixed_inputs[k] = t
+
+            fixed_inputs = _normalize_inputs_for_savedmodel_signature(fixed_inputs, force_1d_keys)
+            if len(var_map) == 0: continue
+
+            with tf.GradientTape() as tape:
+                for v in var_map.values(): tape.watch(v)
+                inputs_for_grad = _normalize_inputs_for_savedmodel_signature({**fixed_inputs, **var_map}, force_1d_keys)
+                pred1 = model(inputs_for_grad, training=False)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+                target = tf.reduce_sum(u1)
+
+            grads = tape.gradient(target, list(var_map.values()))
+
+            # 拼接梯度以计算全局方向
+            flat_grads = []
+            for g in grads:
+                if g is None:
+                    flat_grads.append(tf.zeros([1, 0], dtype=tf.float32))
+                else:
+                    flat_grads.append(tf.reshape(tf.cast(g, tf.float32), [1, -1]))
+
+            concat_g = tf.concat(flat_grads, axis=1) if flat_grads else tf.zeros([1, 0], tf.float32)
+            g_norm = tf.norm(concat_g, axis=1, keepdims=True) + 1e-8
+
+            # --- 修改：使用预计算的 perturbation_budget ---
+            delta_map: Dict[str, tf.Tensor] = {}
+            for (k, v), g in zip(var_map.items(), grads):
+                if g is None:
+                    delta_map[k] = tf.zeros_like(v)
+                else:
+                    # 方向 = 梯度 / ||梯度||， 步长 = perturbation_budget
+                    gg = tf.cast(g, tf.float32)
+                    delta_map[k] = (gg / g_norm) * perturbation_budget
+
+                delta_map[k] = tf.reshape(delta_map[k], tf.shape(v))
+
+            # 施加扰动并前向计算
+            inputs_perturbed = _normalize_inputs_for_savedmodel_signature(
+                {**fixed_inputs, **{k: (var_map[k] + delta_map[k]) for k in var_map.keys()}}, 
+                force_1d_keys
+            )
+            pred2 = model(inputs_perturbed, training=False)
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+
+            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+            input_diff = perturbation_budget # 此时 input_diff 即为我们设定的预算
+
+        else:
+            # 非 dict 处理逻辑类似 (略)
+            x1_tf = tf.cast(_to_tf(x1_np), tf.float32)
+            x_var = tf.Variable(x1_tf)
+            with tf.GradientTape() as tape:
+                tape.watch(x_var)
+                pred1 = model(x_var, training=False)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+                target = tf.reduce_sum(u1)
+            
+            g = tape.gradient(target, x_var)
+            if g is None: continue
+            
+            g_norm = tf.norm(tf.reshape(g, [1, -1]), axis=1, keepdims=True) + 1e-8
+            # 使用基于 sigma 的 budget
+            delta = (g / g_norm) * perturbation_budget
+            
+            pred2 = model(x_var + delta, training=False)
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+            input_diff = perturbation_budget
+
+        if input_diff > 0:
+            ratio = output_diff / input_diff
+            if ratio > max_ratio:
+                max_ratio = ratio
+
+    return float(max_ratio)
+
+def empirical_lipschitz_estimate(
+    model: tf.keras.Model,
+    x_batch: Any,
+    n_samples: int = 1000,
+    epsilon: float = 0.1,  # 每个维度的扰动系数 (0.1 * sigma)
+    seed: int = 1234,
+) -> float:
+    """
+    使用 Scaled FGSM (L-infinity 思想) 估计经验 Lipschitz 常数。
+    
+    逻辑：
+    1. 计算 f0..f11 各自的标准差 sigma_i。
+    2. 计算每个维度的扰动上限 delta_i = sign(grad_i) * epsilon * sigma_i。
+    3. Lipschitz Ratio = ||U(x+delta) - U(x)||_2 / ||delta||_2。
+    """
+    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    force_1d_keys = ["exposure", "treatment"] + dense_keys
+
+    x_batch_np = _as_numpy_features(x_batch)
+
+    # --- 1. 计算 Sigma 和各维度的 Max Perturbation ---
+    if isinstance(x_batch_np, dict):
+        # 提取 f0..f11 的数据计算 std
+        dense_list = []
+        for k in dense_keys:
+            feat = np.asarray(x_batch_np[k]).reshape(-1, 1)
+            dense_list.append(feat)
+        combined_dense = np.concatenate(dense_list, axis=1) # Shape: (B, 12)
+        B = combined_dense.shape[0]
+        sigma_vec = np.std(combined_dense, axis=0) + 1e-6
+    else:
+        B = int(np.asarray(x_batch_np).shape[0])
+        sigma_vec = np.std(x_batch_np, axis=0) + 1e-6
+
+    # 各维度扰动步长上限 (L-infinity 约束)
+    max_perturb_vec = epsilon * sigma_vec 
+    max_perturb_tensor = tf.cast(tf.convert_to_tensor(max_perturb_vec), tf.float32)
+
+    rng = np.random.default_rng(seed)
+    max_ratio = 0.0
+
+    def _to_tf(x):
+        return x if isinstance(x, tf.Tensor) else tf.convert_to_tensor(x)
+
+    # --- 2. 循环采样与对抗攻击 ---
+    for _ in range(int(n_samples)):
+        idx = int(rng.integers(low=0, high=B))
+        x1_np = _slice_one(x_batch_np, idx)
+
+        if isinstance(x1_np, dict):
+            x1_tf = {k: _to_tf(v) for k, v in x1_np.items()}
+            fixed_inputs: Dict[str, tf.Tensor] = {}
+            var_map: Dict[str, tf.Variable] = {}
+
+            for k, v in x1_tf.items():
+                t = tf.cast(tf.convert_to_tensor(v), tf.float32)
+                if k in force_1d_keys:
+                    t = _ensure_1d_like_savedmodel(t)
+                
+                if k in dense_keys:
+                    var_map[k] = tf.Variable(t)
+                else:
+                    fixed_inputs[k] = t
+
+            fixed_inputs = _normalize_inputs_for_savedmodel_signature(fixed_inputs, force_1d_keys)
+            if not var_map: continue
+
+            # 计算梯度寻找最坏方向
+            with tf.GradientTape() as tape:
+                for v in var_map.values(): tape.watch(v)
+                inputs_for_grad = _normalize_inputs_for_savedmodel_signature({**fixed_inputs, **var_map}, force_1d_keys)
+                pred1 = model(inputs_for_grad, training=False)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+                target = tf.reduce_sum(u1)
+
+            # 按照 var_map 的 key 顺序获取梯度
+            grads = tape.gradient(target, list(var_map.values()))
+
+            # --- 核心改进：构造 Scaled FGSM 扰动 ---
+            delta_map: Dict[str, tf.Tensor] = {}
+            total_delta_sq = 0.0
+            
+            # 因为 max_perturb_tensor 对应 f0..f11 的顺序，需要索引对应
+            for i, (k, v) in enumerate(var_map.items()):
+                g = grads[i]
+                if g is None:
+                    d = tf.zeros_like(v)
+                else:
+                    # 使用 sign(grad) * max_perturbation_i
+                    # 确保每个特征都朝着最坏方向移动最大的步长
+                    d = tf.sign(g) * max_perturb_tensor[i]
+                
+                delta_map[k] = tf.reshape(d, tf.shape(v))
+                total_delta_sq += tf.reduce_sum(tf.square(d))
+
+            # 3. 计算扰动后的输出
+            inputs_perturbed = _normalize_inputs_for_savedmodel_signature(
+                {**fixed_inputs, **{k: (var_map[k] + delta_map[k]) for k in var_map.keys()}}, 
+                force_1d_keys
+            )
+            pred2 = model(inputs_perturbed, training=False)
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+
+            # 4. 计算 Ratio
+            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+            input_diff = float(tf.sqrt(total_delta_sq).numpy())
+
+        else:
+            # 非 dict 处理逻辑 (L-infinity)
+            x1_tf = tf.cast(_to_tf(x1_np), tf.float32)
+            x_var = tf.Variable(x1_tf)
+            with tf.GradientTape() as tape:
+                tape.watch(x_var)
+                pred1 = model(x_var, training=False)
+                u1, _ = RobustnessSDP.compute_utilities_from_predictions(pred1)
+                target = tf.reduce_sum(u1)
+            
+            g = tape.gradient(target, x_var)
+            if g is None: continue
+            
+            delta = tf.sign(g) * max_perturb_tensor
+            pred2 = model(x_var + delta, training=False)
+            u2, _ = RobustnessSDP.compute_utilities_from_predictions(pred2)
+            
+            output_diff = float(tf.norm(tf.reshape(u1 - u2, [-1])).numpy())
+            input_diff = float(tf.norm(tf.reshape(delta, [-1])).numpy())
+
+        if input_diff > 1e-9:
             ratio = output_diff / input_diff
             if ratio > max_ratio:
                 max_ratio = ratio
@@ -954,7 +1297,8 @@ def verify_decision_robustness(model, sample_features, L_decision, lambda_cost=0
     #     plt.legend()
         
     #     plt.tight_layout()
-    #     plt.show()
+    #     plt.savefig("./figure.png", dpi=300, bbox_inches="tight")
+    #     plt.close()
     #     print("[Info] 直方图已生成")
     # except Exception as e:
     #     print(f"[Info] 跳过绘图: {e}")
@@ -966,104 +1310,6 @@ def verify_decision_robustness(model, sample_features, L_decision, lambda_cost=0
         "margins": margin
     }
     
-# ----------------------------------------------------
-# 你的主程序部分
-# ----------------------------------------------------
-def main_old():
-    print("[INFO] Loading model")
-    model = tf.keras.models.load_model(
-        # "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
-        "../final-criteo/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed40",
-        compile=False
-    )
-    model.summary()
-    # 假设你已经加载了模型
-    # model = ... (加载代码)
-    # 如果你是 subclass model，确保你能访问到 .user_tower 属性
-    # 如果是 load_model 加载的 saved_model，可能需要用 model.get_layer('user_tower')
-    
-    # 模拟配置 (根据你的实际配置修改)
-    targets = ['paid', 'cost']  # 确保顺序正确
-    treatment_order = [0, 1]
-    
-    print("========== 开始 Multi-tower Lipschitz 验证 ==========")
-    
-    # 1. 计算各部分 Lipschitz
-    L_shared, tower_map = RobustnessSDP.analyze_multitower_lipschitz(
-        model, treatment_order, targets
-    )
-    
-    # 2. 计算决策边界的 Lipschitz
-    # 假设 Utility = (Paid1 - Paid0) - 0.5 * (Cost1 - Cost0)
-    L_decision = RobustnessSDP.calculate_decision_lipschitz(
-        tower_map, targets, lambda_cost=0.5
-    )
-    
-    print("\n========== 最终结果 ==========")
-    print(f"Shared Tower L : {L_shared:.6f}")
-    print(f"决策函数 L_dec : {L_decision:.6f} (用于计算 Margin 的 Robustness)")
-    
-    # 3. 验证鲁棒性
-    # 只有当 L_decision 处于合理范围 (0.1 ~ 50 左右) 时，结果才可信
-    if L_decision < 1e-4:
-        print("[警告] L_decision 依然极小，请检查：")
-        print("1. 模型权重是否因为正则化过强而接近 0？")
-        print("2. 是否使用了 Sigmoid 激活函数？(Sigmoid 会导致梯度消失)")
-    
-    # 4. 计算 Margin
-    # 这里的 sample_features 需要你自己提供
-    # preds = model(sample_features, training=False)
-    # 计算 utility margin...
-    # safe_radius = margin / (2 * L_decision)
-    
-    # 你的验证逻辑...
-        
-    # sample_path = "sample_features_ECLIFT.npz"
-    sample_path = "sample_features_criteo.npz"
-
-    print(f"\n[INFO] Loading sample features from: {sample_path}")
-    # Expect a .npz that stores either:
-    #   - key "x" (tensor input), or
-    #   - multiple keys for dict input.
-    data = np.load(sample_path, allow_pickle=True)
-    if "x" in data.files:
-        sample_features = data["x"].astype(np.float32)
-    else:
-        # dict input
-        # sample_features = {k: tf.constant(data[k]) for k in data.files}
-        sample_features = {}
-        for k in data.files:
-            v = data[k]
-            # 把 (B,1) 统一变成 (B,)
-            if v.ndim == 2 and v.shape[1] == 1:
-                v = v.reshape(-1)
-            sample_features[k] = tf.constant(v)
-
-        
-
-    # ===== 2.5) Empirical Lipschitz estimate (random perturbations) =====
-    # 使用同一批 sample_features 来估计经验 Lipschitz（输出是 utilities 的变化率）
-    # 注意：这是经验估计，不是严格上界；通常应 <= 你算出来的 SDP 上界（但也可能因数值/统计抖动而接近）
-    x_for_emp = sample_features  # tensor 或 dict 都支持
-    emp_L = empirical_lipschitz_estimate(
-        model=model,
-        x_batch=x_for_emp,
-        # n_samples=1000,   # 你可以改大，比如 1000；越大越慢
-        epsilon=0.01,
-        seed=42,
-    )
-    print("\n========== Empirical Lipschitz Estimate ==========")
-    print(f"[RESULT] Empirical Lipschitz (epsilon=0.01, n_samples=200): ~ {emp_L:.6g}")
-
-
-    stats = verify_decision_robustness(
-        model=model, 
-        sample_features=sample_features, 
-        L_decision=L_decision, # 使用上一步 calculate_decision_lipschitz 的返回值
-        lambda_cost=0.5,
-        epsilon=0.1
-    )
-
 # ==============================================================================
 # Main Execution Flow
 # ==============================================================================
@@ -1074,8 +1320,8 @@ def main():
     # --------------------------------------------------------------------------
     # 模型路径
     # MODEL_PATH = "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40"
-    MODEL_PATH = "../final-criteo/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed40"
-    # MODEL_PATH = "../final-criteo/model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_run2"
+    # MODEL_PATH = "../final-criteo/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed40"
+    MODEL_PATH = "../final-criteo/model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2"
     # 样本数据路径 (.npz)
     # DATA_PATH = "sample_features_ECLIFT.npz" 
     DATA_PATH = "sample_features_criteo.npz" 
@@ -1176,8 +1422,8 @@ def main():
     emp_L = empirical_lipschitz_estimate(
         model=model,
         x_batch=sample_features,
-        n_samples=200,    # 采样次数
-        epsilon=0.01,     # 微小扰动
+        n_samples=1000,    # 采样次数
+        epsilon=EPSILON,     # 微小扰动
         seed=42
     )
     print(f">>> [Result] Empirical L (Approx)      : {emp_L:.6f}")

@@ -180,7 +180,7 @@ model_paths_else = [
 ]
 
 model_name_map = {
-    "./model/SLearner_2pos_lr3_clip=100": "TPM-SL",
+    "./model/SLearner_2pos_lr3_clip=100": "MTP",
     "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw": "DFCL-PL",
     "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw": "DFCL-MER",
     "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2": "DFCL-IFD",
