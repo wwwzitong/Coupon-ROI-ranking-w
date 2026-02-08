@@ -192,7 +192,8 @@ def empirical_lipschitz_estimate_old(
     仅扰动 dict 输入中的 dense keys: f0..f11，其它输入保持不变。
     并强制对齐 SavedModel 签名：f0..f11/exposure/treatment 都必须是 shape=(None,)
     """
-    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    dense_keys = [f"f{i}" for i in range(0, 16)]  # f0..f11
+    # dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
     force_1d_keys = ["exposure", "treatment"] + dense_keys
 
     x_batch_np = _as_numpy_features(x_batch)
@@ -340,7 +341,8 @@ def empirical_lipschitz_estimate_v1(
     """
     修改版：每个 feature 的真正扰动数值为 epsilon * 标准差 (std)。
     """
-    dense_keys = [f"f{i}" for i in range(0, 12)]
+    dense_keys = [f"f{i}" for i in range(0, 16)]
+    # dense_keys = [f"f{i}" for i in range(0, 12)]
     force_1d_keys = ["exposure", "treatment"] + dense_keys
 
     x_batch_np = _as_numpy_features(x_batch)
@@ -469,7 +471,8 @@ def empirical_lipschitz_estimate_v2(
       - 用 ||concat(g_scaled)|| 归一化：delta = epsilon * g_scaled / (||g_scaled|| + 1e-8)
       - 返回 max ||u(x)-u(x+delta)|| / ||delta||
     """
-    dense_keys = [f"f{i}" for i in range(0, 12)]
+    dense_keys = [f"f{i}" for i in range(0, 16)]
+    # dense_keys = [f"f{i}" for i in range(0, 12)]
     force_1d_keys = ["exposure", "treatment"] + dense_keys
 
     x_batch_np = _as_numpy_features(x_batch)
@@ -609,7 +612,8 @@ def empirical_lipschitz_estimate_v3(
     结合标准差（Sigma）和梯度方向估计经验 Lipschitz 常数。
     扰动预算 Budget = || epsilon * sigma_vec ||_2
     """
-    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    # dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    dense_keys = [f"f{i}" for i in range(0, 16)]  # f0..f11
     force_1d_keys = ["exposure", "treatment"] + dense_keys
 
     x_batch_np = _as_numpy_features(x_batch)
@@ -752,7 +756,8 @@ def empirical_lipschitz_estimate(
     2. 计算每个维度的扰动上限 delta_i = sign(grad_i) * epsilon * sigma_i。
     3. Lipschitz Ratio = ||U(x+delta) - U(x)||_2 / ||delta||_2。
     """
-    dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
+    dense_keys = [f"f{i}" for i in range(0, 16)]  # f0..f11
+    # dense_keys = [f"f{i}" for i in range(0, 12)]  # f0..f11
     force_1d_keys = ["exposure", "treatment"] + dense_keys
 
     x_batch_np = _as_numpy_features(x_batch)
@@ -791,15 +796,36 @@ def empirical_lipschitz_estimate(
             fixed_inputs: Dict[str, tf.Tensor] = {}
             var_map: Dict[str, tf.Variable] = {}
 
-            for k, v in x1_tf.items():
-                t = tf.cast(tf.convert_to_tensor(v), tf.float32)
-                if k in force_1d_keys:
-                    t = _ensure_1d_like_savedmodel(t)
+            # for k, v in x1_tf.items():
+            #     t = tf.cast(tf.convert_to_tensor(v), tf.float32)
+            #     if k in force_1d_keys:
+            #         t = _ensure_1d_like_savedmodel(t)
                 
+            #     if k in dense_keys:
+            #         var_map[k] = tf.Variable(t)
+            #     else:
+            #         fixed_inputs[k] = t
+            dense_keys = [f"f{i}" for i in range(0, 16)]   # f0..f15
+            # dense_keys = [f"f{i}" for i in range(0, 12)]   # f0..f15
+            # 仅这几个 key 我们才做 float32 + (B,1)->(B,) 处理
+            force_1d_float_keys = dense_keys  # 如果 exposure/treatment 也是 float 且要扰动/要签名对齐，再加进来
+
+            for k, v in x1_tf.items():
+                t = tf.convert_to_tensor(v)
+
+                # 只对需要扰动/需要对齐的一组 float key 做 cast + 形状处理
+                if k in force_1d_float_keys:
+                    t = tf.cast(t, tf.float32)
+                    t = _ensure_1d_like_savedmodel(t)
+                    if t.shape.rank is not None and t.shape.rank != 1:
+                        t = tf.reshape(t, [-1])
+
+                # 只对 f0..f15 做扰动变量，其它都保持原样（string/int 都可以）
                 if k in dense_keys:
-                    var_map[k] = tf.Variable(t)
+                    var_map[k] = tf.Variable(t)  # t 是 float32 且 shape 对齐
                 else:
-                    fixed_inputs[k] = t
+                    fixed_inputs[k] = t          # 不做 cast，不动 dtype
+
 
             fixed_inputs = _normalize_inputs_for_savedmodel_signature(fixed_inputs, force_1d_keys)
             if not var_map: continue
@@ -1319,16 +1345,18 @@ def main():
     # 0. 配置参数 (根据你的实际实验设置修改)
     # --------------------------------------------------------------------------
     # 模型路径
-    # MODEL_PATH = "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40"
+    # MODEL_PATH = "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44"
+    MODEL_PATH = "../final-ECLIFT/model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0"
+    # MODEL_PATH = "../final-ECLIFT/model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_run2"
     # MODEL_PATH = "../final-criteo/model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_seed40"
-    MODEL_PATH = "../final-criteo/model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2"
+    # MODEL_PATH = "../final-criteo/model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2"
     # 样本数据路径 (.npz)
-    # DATA_PATH = "sample_features_ECLIFT.npz" 
-    DATA_PATH = "sample_features_criteo.npz" 
+    DATA_PATH = "sample_features_ECLIFT_4096.npz" 
+    # DATA_PATH = "sample_features_criteo.npz" 
     
     # 鲁棒性验证参数
-    EPSILON = 0.1          # 攻击半径 (L2 Norm)
-    LAMBDA_COST = 0.5      # 效用公式权重: Paid - lambda * Cost
+    EPSILON = 0.01          # 攻击半径 (L2 Norm)
+    LAMBDA_COST = 0.4      # 效用公式权重: Paid - lambda * Cost
     TARGETS = ['paid', 'cost'] 
     TREATMENTS = [0, 1]
     

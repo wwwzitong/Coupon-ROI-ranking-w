@@ -24,40 +24,13 @@ import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# ==================== 设置随机种子确保可复现性 ====================
-def set_seeds(seed=42):
-    """
-    设置所有随机种子以确保实验可复现
-    Args:
-        seed: 随机种子值，默认为42
-    """
-    # 设置Python随机种子
-    random.seed(seed)
-    
-    
-    # 设置NumPy随机种子
-    np.random.seed(seed)
-    
-    # 设置TensorFlow随机种子
-    tf.random.set_seed(seed)
-    # 设置操作确定性（可能影响性能但提高可复现性）
-    os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-    
-    # 设置PYTHONHASHSEED
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    
-    print(f"已设置随机种子: {seed}")
-
-set_seeds(42)  # 你可以更改为任何固定值
-
 # from fsfc_mine_mx2 import * #自行生成fsfc文件（脚本放在data_flow中）
 # from data_utils_mx2 import *
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_ECLIFT import *
+from data_utils import *
 
 # 将输出保存到文件
 
@@ -114,9 +87,35 @@ def tee_output(filepath, mode="a", encoding="utf-8"):
             sys.stdout, sys.stderr = old_out, old_err
             f.close()
 
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
-    'eval_data': '../data/ECLIFT_test.csv',
+    'eval_data': '../data/criteo_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -168,49 +167,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3_seed44",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed44",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed44",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44",
-    
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
 ]
 model_paths_else = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43",
-    
-    "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0",
-    "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0",
+    "./model/SLearner_2pos_lr3_clip=100",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5",
+
 ]
 
 model_name_map = {
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3": "MTP",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10": "DFCL-PL",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5": "DFCL-MER",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100": "DFCL-IFD",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0": "CC-DFL(Ours)",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0": "CC-DFL",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39":"seed39",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40":"seed40",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41":"seed41",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0":"seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43":"seed43",
-
-    "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0": "CC-DFL w/o QP",
-    "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0": "CC-DFL w/o CP",
+    "./model/SLearner_2pos_lr3_clip=100": "MTP",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw": "DFCL-PL",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw": "DFCL-MER",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2": "DFCL-IFD",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5": "CC-DFL(Ours)",
 }
 
 # In[7]:
@@ -753,7 +727,7 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     ax.plot(
         x_coords, y_coords,
         linewidth=2.8,
-        label=f'CC-DFL(Ours) (AUUC = {auuc_score:.4f})'
+        label='CC-DFL(Ours)'
     )
 
     # Random baseline：黑色虚线对角线（示例图风格）
@@ -795,7 +769,6 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     plt.close(fig)
 
     print(results)
-
 
 
 # ## Uplift Bar Plot
@@ -858,38 +831,35 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
     # 4. 绘制柱状图
     bin_labels = [f'Top {i*100/bins:.0f}-{(i+1)*100/bins:.0f}%' for i in range(bins)]
     
-    # plt.figure(figsize=(12, 7))
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(12, 7))
     x = np.arange(len(bin_labels))
     num_actual_bins = len(actual_uplifts_per_bin)
     x = np.arange(num_actual_bins)
     
     width = 0.35
-    FONT_SIZE = 16 
 
     bars1 = plt.bar(x - width/2, actual_uplifts_per_bin, width, color='darkblue', label='True Uplift')
     bars2 = plt.bar(x + width/2, predicted_uplifts_per_bin, width, color='orange', label='Predicted Uplift')
     
     # 在每个柱子上方显示数值
-    # for bar in bars1:
-    #     yval = bar.get_height()
-    #     plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center', fontsize=FONT_SIZE)
+    for bar in bars1:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center')
 
-    # for bar in bars2:
-    #     yval = bar.get_height()
-    #     plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center', fontsize=FONT_SIZE)
+    for bar in bars2:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center')
 
     # 绘制一条代表整体平均Uplift的基准线
     overall_average_uplift = (df.loc[df[treatment_col] == 1, target_col].mean() - 
                               df.loc[df[treatment_col] == 0, target_col].mean())
     plt.axhline(y=overall_average_uplift, color='r', linestyle='--', label=f'Overall Avg Uplift ({overall_average_uplift:.4f})')
 
-    # plt.title(f'Uplift Bar Plot for Model: {model_path}', fontsize=FONT_SIZE)
-    plt.xlabel('User Deciles (Sorted by Predicted Uplift)', fontsize=FONT_SIZE)
-    plt.ylabel(f'Average Uplift ({target_col})', fontsize=FONT_SIZE)
-    plt.xticks(x, bin_labels, rotation=45, ha='right', fontsize=FONT_SIZE)
-    plt.yticks(fontsize=FONT_SIZE)
-    plt.legend(fontsize=FONT_SIZE)
+    plt.title(f'Uplift Bar Plot for Model: {model_path}')
+    plt.xlabel('User Deciles (Sorted by Predicted Uplift)')
+    plt.ylabel(f'Average Uplift ({target_col.upper()})')
+    plt.xticks(x, bin_labels, rotation=45, ha='right')
+    plt.legend()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
 
@@ -1038,7 +1008,6 @@ for model_path in model_paths_DFCL:
         plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
         plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
-
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
         # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-roi AUUC 分数为: {auuc:.6f}")
@@ -1047,10 +1016,10 @@ for model_path in model_paths_DFCL:
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
         print("正在生成 Paid Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, bins=10)
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
         print("正在生成 Cost Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, bins=10)
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
@@ -1219,7 +1188,6 @@ def plot_aucc_from_json_v1(json_path: str, plot_path: str = 'aucc_comparison.png
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-
 def plot_aucc_from_json_v2(
     json_path: str,
     plot_path: str = 'aucc_comparison.png',
@@ -1296,11 +1264,6 @@ def plot_aucc_from_json_v2(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-from pathlib import Path
-import json
-import matplotlib.pyplot as plt
-from typing import Dict, Any, List, Optional
-
 def plot_aucc_from_json_v3(
     json_path: str,
     plot_path: str = 'aucc_comparison.png',
@@ -1319,43 +1282,69 @@ def plot_aucc_from_json_v3(
         print("JSON 文件为空或格式不正确，无法绘图。")
         return
 
-    model_name_map = model_name_map or {}
-
-    # ✅ 核心：按 model_names 的顺序决定绘图顺序（也决定 legend 顺序）
+    results_to_plot = all_results
     if model_names:
-        ordered_keys = [k for k in model_names if k in all_results]
-        not_found = [k for k in model_names if k not in all_results]
-        if not_found:
-            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
-    else:
-        # 不传 model_names 时，就按 JSON 的 key 顺序画
-        ordered_keys = list(all_results.keys())
+        results_to_plot = {k: v for k, v in all_results.items() if k in model_names}
 
-    if not ordered_keys:
+        found = set(results_to_plot.keys())
+        not_found = set(model_names) - found
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found)}")
+
+    if not results_to_plot:
         print("没有找到可供绘制的模型数据。")
         return
 
     plt.figure(figsize=(10, 8))
 
-    for model_key in ordered_keys:
-        data = all_results.get(model_key, {})
+    model_name_map = model_name_map or {}
+
+    OTHER_COLORS = [
+        "#1f77b4",  # blue
+        "#2ca02c",  # green
+        "#ff7f0e",  # orange
+        "#9467bd",  # purple
+    ]
+    color_idx = 0  # 给非 ours 曲线依次分配颜色
+
+    base_lw = 2.0  # 其他模型的线宽（你也可以调）
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
+
+    for model_key, data in results_to_plot.items():
         if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
             print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
             continue
 
+        # 图例显示名
         display_name = model_name_map.get(model_key)
         if not display_name:
             display_name = Path(model_key).name if fallback_to_basename else model_key
 
+        # --- 核心：对 CC-DFL(Ours) 特殊处理 ---
+        is_highlight = (display_name == highlight_name)
+
+        if is_highlight:
+            color = "red"
+            lw = base_lw * 1.2
+            zorder = 10
+        else:
+            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
+            color_idx += 1
+            lw = base_lw
+            zorder = 1
+
         plt.plot(
             data['x_coords'],
             data['y_coords'],
-            marker='.',
             linestyle='-',
+            linewidth=lw,
+            color=color,
+            marker=None,        # 已去掉 marker
+            zorder=zorder,
             label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
         )
 
-    # 随机线放最后（legend 也会在最后）
+    # 随机线：归一化坐标下就是 y=x
     plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
 
     plt.title('AUCC Curve Comparison')
@@ -1364,7 +1353,7 @@ def plot_aucc_from_json_v3(
     plt.legend()
     plt.grid(True)
 
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
@@ -1445,7 +1434,7 @@ def plot_aucc_from_json_v4(
             color=color,
             marker=None,        # 已去掉 marker
             zorder=zorder,
-            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
+            label=f'{display_name}'
         )
 
     # 随机线：归一化坐标下就是 y=x
@@ -1521,13 +1510,13 @@ def plot_aucc_from_json(
     OTHER_COLORS = [
         "#1f77b4",  # blue
         "#2ca02c",  # green
-        "#9467bd",  # purple
         "#ff7f0e",  # orange
+        "#9467bd",  # purple
     ]
     color_idx = 0
 
-    base_lw = 2.5
-    highlight_name = "CC-DFL"  # 这里改成你图例里真正显示的名字
+    base_lw = 2.0
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
 
     # ✅ 建议配合字号变大稍微放大画布
     plt.figure(figsize=(7.2, 5.4))
@@ -1562,11 +1551,11 @@ def plot_aucc_from_json(
             color=color,
             marker=None,
             zorder=zorder,
-            label=f'{display_name} ({data["aucc_score"]:.4f})',
+            label=display_name
         )
 
     # 随机线：归一化坐标下就是 y=x
-    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random', alpha=0.3)
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random')
 
     # ✅ 去掉标题（不再设置 plt.title）
     # plt.title('AUCC Curve Comparison')  # 删除/注释

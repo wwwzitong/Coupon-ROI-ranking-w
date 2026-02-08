@@ -60,21 +60,21 @@
 
 # python train.py --seed 39 --model_class_name EcomDFCL_v3 --alpha 10 --loss_function 2pll --bs 256 --lr 1e-3 --clipnorm 5e3 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed39
 # python train.py --seed 39 --model_class_name EcomDFCL_v3 --alpha 0.1 --loss_function 3erl --bs 512 --lr 1e-3 --clipnorm 100 --tau 2.5 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed39
-python train.py --seed 39 --model_class_name EcomDFCL_v3 --alpha 100 --loss_function 4ifdl --bs 512 --lr 1e-3 --clipnorm 100 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed39
+# python train.py --seed 39 --model_class_name EcomDFCL_v3 --alpha 100 --loss_function 4ifdl --bs 512 --lr 1e-3 --clipnorm 100 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed39
 
-python train.py --seed 39 --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39
+# python train.py --seed 39 --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39
 
 
 # seed 44:
 
-python train.py --seed 44 --model_class_name SLearner --bs 256 --lr 1e-3 --clipnorm 5e3 --model_path ./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3_seed44
+# python train.py --seed 44 --model_class_name SLearner --bs 256 --lr 1e-3 --clipnorm 5e3 --model_path ./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3_seed44
 
-python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 10 --loss_function 2pll --bs 256 --lr 1e-3 --clipnorm 5e3 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed44
-python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 0.1 --loss_function 3erl --bs 512 --lr 1e-3 --clipnorm 100 --tau 2.5 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed44
-python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 100 --loss_function 4ifdl --bs 512 --lr 1e-3 --clipnorm 100 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44
+# python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 10 --loss_function 2pll --bs 256 --lr 1e-3 --clipnorm 5e3 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed44
+# python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 0.1 --loss_function 3erl --bs 512 --lr 1e-3 --clipnorm 100 --tau 2.5 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed44
+# python train.py --seed 44 --model_class_name EcomDFCL_v3 --alpha 100 --loss_function 4ifdl --bs 512 --lr 1e-3 --clipnorm 100 --batch_sum_mean sum --model_path ./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44
 
-python train.py --seed 44 --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44
+# python train.py --seed 44 --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44
 
 
-python Evaluation.py
+# python Evaluation.py
 

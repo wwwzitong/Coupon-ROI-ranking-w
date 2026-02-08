@@ -1,8 +1,37 @@
 import tensorflow as tf
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
 import os
+import numpy as np
+import random
+# ==================== 设置随机种子确保可复现性 ====================
+# def set_seeds(seed=42):
+#     """
+#     设置所有随机种子以确保实验可复现
+#     Args:
+#         seed: 随机种子值，默认为42
+#     """
+#     # 设置Python随机种子
+#     random.seed(seed)
+    
+    
+#     # 设置NumPy随机种子
+#     np.random.seed(seed)
+    
+#     # 设置TensorFlow随机种子
+#     tf.random.set_seed(seed)
+#     # 设置操作确定性（可能影响性能但提高可复现性）
+#     os.environ['TF_DETERMINISTIC_OPS'] = '1'
+#     os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+#     # 设置PYTHONHASHSEED
+#     os.environ['PYTHONHASHSEED'] = str(seed)
+    
+#     print(f"已设置随机种子: {seed}")
+
+# set_seeds(42)  # 你可以更改为任何固定值
+
 import sys
-CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
 from data_utils import *
@@ -332,11 +361,10 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             lambda_term = tf.stop_gradient(self.mu) * prediction_loss
 
             # 二次惩罚项: (ρ/2) * g(w)
-            # penalty_term = (self.rho / 2.0) * prediction_loss ** 2
+            penalty_term = (self.rho / 2.0) * prediction_loss ** 2
 
             # 最终用于更新模型参数 w 的总损失
-            # model_update_loss = -decision_loss + lambda_term + penalty_term
-            model_update_loss = -decision_loss + lambda_term
+            model_update_loss = -decision_loss + lambda_term + penalty_term
 
 
         # 3. 计算梯度并更新模型参数 w (Primal Update)
@@ -428,7 +456,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self._add_summaries("losses/5_prediction_loss", prediction_loss, step=step)
         tf.summary.scalar("lagrangian/mu", self.mu, step=step)
         tf.summary.scalar("lagrangian/lambda_term", lambda_term, step=step)
-        # tf.summary.scalar("lagrangian/penalty_term", penalty_term, step=step)
+        tf.summary.scalar("lagrangian/penalty_term", penalty_term, step=step)
 
         # --- 进阶监控 1: 逐层激活与预测值 ---
         # 监控 User Tower 的每一层激活
@@ -466,7 +494,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             "paid_loss": paid_loss,
             "cost_loss": cost_loss,
             "lambda_term": lambda_term,
-            # "penalty_term": penalty_term,
+            "penalty_term": penalty_term,
             "lagrangian": self.mu,
         }
 
