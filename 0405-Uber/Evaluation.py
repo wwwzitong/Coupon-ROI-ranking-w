@@ -57,7 +57,7 @@ set_seeds(42)  # 你可以更改为任何固定值
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_ECLIFT import *
+from data_utils_UScensus import *
 
 # 将输出保存到文件
 
@@ -116,8 +116,8 @@ def tee_output(filepath, mode="a", encoding="utf-8"):
 
 
 config = {
-    'eval_data': '../data/ECLIFT_test.csv',
-    'batch_size': 1024*16,
+    'eval_data': '../data/census1990_test.csv',
+    'batch_size': 1024,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
     'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
@@ -196,47 +196,22 @@ model_paths_DFCL = [
     # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=10_seed42",
 
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=2.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=5.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=10_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=100_seed42",
+    # "./model/SLearner_mse_mean_bs256_step500_lr1e-3_clip=5e3",
+    # "./model/EcomDFCL_v3_mse_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    # "./model/EcomDFCL_v3_mse_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    # "./model/EcomDFCL_v3_mse_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
+    # "./model/EcomDFCL_regretNet_rplusc_mse_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.1_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.2_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.3_seed42",
-
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.01_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.02_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.05_seed42",
-
-    "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.0001_seed42",
-    "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=100_seed42",
-
+    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    # "./model/EcomDFCL_v3_wce_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    # "./model/EcomDFCL_v3_wce_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
+    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
 ]
 model_paths_else = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43",
-    
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0",
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.5_seed42",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.7_seed42",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.9_seed42",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed42",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.2_seed42",
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.5_seed42",
 
 ]
 
@@ -1092,11 +1067,11 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        print("正在生成 Paid Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, bins=10)
+        # print("正在生成 Paid Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, bins=10)
         
-        print("正在生成 Cost Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, bins=10)
+        # print("正在生成 Cost Uplift Bar Plot...")
+        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, bins=10)
         
         print("正在生成 AUCC Plot (Uplift)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)

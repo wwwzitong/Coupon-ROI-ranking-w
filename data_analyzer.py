@@ -85,7 +85,7 @@ def analyze_labels_and_treatment_from_csv(file_path):
 
 # --- 主执行逻辑 ---
 # !! 请将此路径替换为您的实际 CSV 文件路径 !!
-CSV_FILE_PATH = '/home/kongli/WangHe/data/criteo_data.csv' 
+CSV_FILE_PATH = './data/census1990_train.csv' 
 
 # 执行分析
 report_lines = analyze_labels_and_treatment_from_csv(CSV_FILE_PATH)

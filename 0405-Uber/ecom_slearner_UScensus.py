@@ -1,0 +1,496 @@
+import tensorflow as tf
+#from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
+import os
+import numpy as np
+import random
+# ==================== 设置随机种子确保可复现性 ====================
+# def set_seeds(seed=42):
+#     """
+#     设置所有随机种子以确保实验可复现
+#     Args:
+#         seed: 随机种子值，默认为42
+#     """
+#     # 设置Python随机种子
+#     random.seed(seed)
+    
+    
+#     # 设置NumPy随机种子
+#     np.random.seed(seed)
+    
+#     # 设置TensorFlow随机种子
+#     tf.random.set_seed(seed)
+#     # 设置操作确定性（可能影响性能但提高可复现性）
+#     os.environ['TF_DETERMINISTIC_OPS'] = '1'
+#     os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+#     # 设置PYTHONHASHSEED
+#     os.environ['PYTHONHASHSEED'] = str(seed)
+    
+#     print(f"已设置随机种子: {seed}")
+
+# set_seeds(42)  # 你可以更改为任何固定值
+
+import sys
+CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if CODE_DIR not in sys.path:
+    sys.path.insert(0, CODE_DIR)
+from data_utils_ECLIFT import *
+# SPARSE_FEATURE_NAME = ['feat1_seq1', 'feat1_seq2', 'feat1_seq3', 'feat1_seq4', 'feat1_seq5', 'feat1_seq6', 'feat1_seq7', 'feat1_seq8', 'feat2_seq1']
+# DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11', 'f12', 'f13', 'f14', 'f15']
+DENSE_FEATURE_NAME = [f'f{i}' for i in range(46)]
+SPARSE_FEATURE_NAME = []
+SPARSE_FEATURE_NAME_SLOT_ID = {}
+# SPARSE_FEATURE_NAME_SLOT_ID = {name: idx for idx, name in enumerate(SPARSE_FEATURE_NAME)}
+statistical_config={
+    'N':343176,
+    'N1':160841,
+    'N0':182335
+}
+
+# # 强制UTF-8编码
+# sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+class SLearner(tf.keras.Model): # std+2pos
+    """
+    使用 TensorFlow 2.x Keras API 实现的电商模型。
+    该模型集成了 GradNorm 和自定义决策损失。
+    """
+    def __init__(self, rho=0.1, alpha=1.0, batch_sum_mean='mean', loss_function='2pll', dense_stats=None, fcd_mode='log1p', max_multiplier=1.0, tau=1.0, **kwargs):
+        super().__init__(**kwargs)
+        # self.paid_pos_weight = 97.21/(100-97.21)
+        # self.cost_pos_weight = 51.76/(100-51.76)
+        self.paid_pos_weight = 1.0
+        self.cost_pos_weight = 1.0
+        
+        # 从 fsfc.py 导入配置
+        self.sparse_feature_names = SPARSE_FEATURE_NAME
+        self.dense_feature_names = DENSE_FEATURE_NAME
+        self.sparse_feature_slot_map = SPARSE_FEATURE_NAME_SLOT_ID
+        self.num_estimated_vec_features = 10000# 为什么要这么大数量 12000000
+
+        # 模型超参数 TODO：需要依据实际数据集进行修改
+        self.sparse_feature_dim = 8 # TODO：简化为4
+        self.dense_feature_dim = 1
+        self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
+#         self.ratios = [0.1, 0.5, 1.0]  #先用少量测试
+        self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
+        self.targets = ['paid', 'cost']
+        
+        self.total_samples = statistical_config['N']
+        self.treatment_sample_counts = {
+            '1': statistical_config['N1'],
+            '0': statistical_config['N0']
+        }
+        self.sparse_pooling_type = "mean"  # "mean" | "max" | "attention"
+        
+        # 特征处理层
+        self._build_feature_layers()
+        
+        # 网络结构，user_tower为共享底层
+        # self.user_tower = tf.keras.Sequential([
+        #     tf.keras.layers.Dense(512, activation='relu', kernel_initializer='glorot_normal'), # 512->128
+        #     tf.keras.layers.Dense(256, activation='relu', kernel_initializer='glorot_normal'),# 256->64
+        #     tf.keras.layers.Dense(128, activation='relu', kernel_initializer='glorot_normal')# 128->32
+        # ], name='user_tower')
+        # TOWER
+        self.user_tower = tf.keras.Sequential([
+            tf.keras.layers.Dense(512, activation='relu', kernel_initializer='glorot_normal'), # 512->128
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(256, activation='relu', kernel_initializer='glorot_normal'),# 256->64
+            tf.keras.layers.BatchNormalization(),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(128, activation='relu', kernel_initializer='glorot_normal')# 128->32
+        ], name='user_tower')
+        
+        # =======9-5Additional，为了能够保存中间activation=========
+         # 显式构建 user_tower 以提前创建权重
+        user_tower_input_dim = (
+            len(self.sparse_feature_names) * self.sparse_feature_dim +
+            len(self.dense_feature_names) * self.dense_feature_dim
+        )
+        self.user_tower.build(input_shape=(None, user_tower_input_dim))
+        
+        self.task_towers = {} # 2x2，为prediction loss服务
+        tower_dims = [64, 32, 1]
+        for target in self.targets:
+            for treatment in self.treatment_order:
+                name = "{}_treatment_{}_tower".format(target, treatment)
+                self.task_towers[name] = tf.keras.Sequential([
+                    tf.keras.layers.Dense(dims, activation='relu', kernel_initializer='glorot_normal') for dims in tower_dims[:-1]
+                ] + [
+                    tf.keras.layers.Dense(tower_dims[-1], kernel_initializer='glorot_normal')
+                ], name=name)
+
+        # GradNorm 的可训练损失权重
+#         self.loss_weights = tf.Variable([1.0, 1.0], trainable=True, name='grad_norm_loss_weights')
+
+    def _build_feature_layers(self):# 特征embedding层，为call部分的sparse features服务
+        # 3. 修改此方法，同时创建 Hashing 层和 Embedding 层
+        # Hashing 层: 每个稀疏特征对应一个，负责 string -> int
+        self.hashing_layers = {}
+        for feature_name in self.sparse_feature_names:
+            self.hashing_layers[feature_name] = tf.keras.layers.Hashing(
+                num_bins=self.num_estimated_vec_features, 
+                name="hashing_{}".format(feature_name)
+            )
+
+        self.embedding_layers = {}
+        unique_slot_ids = set(self.sparse_feature_slot_map.values())
+        for slot_id in unique_slot_ids:
+            self.embedding_layers[str(slot_id)] = tf.keras.layers.Embedding(
+                input_dim=self.num_estimated_vec_features,
+                output_dim=self.sparse_feature_dim,
+                name="embedding_slot_{}".format(slot_id)
+            )
+        
+        # attention pooling 打分层（只有选择 attention 才会用到）
+        self.attn_score_layers = {}
+        if self.sparse_pooling_type == "attention":
+            for feature_name in self.sparse_feature_names:
+                self.attn_score_layers[feature_name] = tf.keras.layers.Dense(
+                    1, use_bias=False, name=f"attn_score_{feature_name}"
+                )
+
+    def _pool_sparse_embeddings(self, emb, mask, feature_name=None):
+        """
+        emb:  [B, L, D]
+        mask: [B, L]  (True/False)
+        return: [B, D]
+        """
+        mask_f = tf.cast(mask, tf.float32)
+        mask_f_e = tf.expand_dims(mask_f, axis=-1)  # [B, L, 1]
+
+        if self.sparse_pooling_type == "mean":
+            emb_masked = emb * mask_f_e
+            denom = tf.reduce_sum(mask_f_e, axis=1) + 1e-8
+            return tf.reduce_sum(emb_masked, axis=1) / denom
+
+        if self.sparse_pooling_type == "max":
+            very_neg = tf.constant(-1e9, dtype=emb.dtype)
+            emb_masked = tf.where(mask_f_e > 0, emb, very_neg)
+            return tf.reduce_max(emb_masked, axis=1)
+
+        # attention
+        score_layer = self.attn_score_layers[feature_name]
+        scores = score_layer(emb)  # [B, L, 1]
+        very_neg = tf.constant(-1e9, dtype=scores.dtype)
+        scores = tf.where(mask_f_e > 0, scores, very_neg)
+        attn = tf.nn.softmax(scores, axis=1)
+        return tf.reduce_sum(emb * attn, axis=1)
+    
+    def call(self, inputs, training=True): # 定义数据从输入到输出的完整流动路径       
+        # 特征处理
+        sparse_vectors = []
+
+        for feature_name in self.sparse_feature_names:
+            raw = inputs[feature_name]  # 你现在实际是 [B] string（不是 [B,180]）
+
+            # 1) mask + ids
+            if raw.dtype == tf.string:
+                # 兼容 "" 和 "0" 作为 padding（你可按实际 padding 改）
+                mask = tf.logical_and(tf.not_equal(raw, ""), tf.not_equal(raw, "0"))
+                ids = self.hashing_layers[feature_name](raw)  # [B]
+            else:
+                raw_int = tf.cast(raw, tf.int32)
+                mask = tf.not_equal(raw_int, 0)
+                ids = tf.math.floormod(raw_int, self.num_estimated_vec_features)  # [B]
+
+            ids = tf.cast(ids, tf.int32)
+
+            # 2) 关键修复：如果是 [B]，扩成 [B,1]，让后续 embedding/pooling 走序列逻辑
+            if ids.shape.rank == 1:            # 静态 rank（最常见）
+                ids = tf.expand_dims(ids, axis=1)    # [B,1]
+                mask = tf.expand_dims(mask, axis=1)  # [B,1]
+            else:
+                # 动态 rank fallback（更保险）
+                ids = tf.cond(tf.equal(tf.rank(ids), 1),
+                            lambda: tf.expand_dims(ids, 1),
+                            lambda: ids)
+                mask = tf.cond(tf.equal(tf.rank(mask), 1),
+                            lambda: tf.expand_dims(mask, 1),
+                            lambda: mask)
+
+            # 3) embedding: [B, L, D]（这里 L=1）
+            slot_id = str(self.sparse_feature_slot_map[feature_name])
+            emb = self.embedding_layers[slot_id](ids)  # [B, 1, D]
+
+            # 4) pooling -> [B, D]（不会再变成 [B]）
+            pooled = self._pool_sparse_embeddings(emb, mask, feature_name=feature_name)
+            sparse_vectors.append(pooled)  # [B, D]
+
+        # ===== dense 部分建议也用显式 B reshape，避免潜在问题 =====
+        B = tf.shape(inputs[self.dense_feature_names[0]])[0]
+        dense_vectors = []
+        for feature_name in self.dense_feature_names:
+            fcd = inputs[feature_name]
+            fcd = tf.math.log1p(tf.maximum(fcd,0.0))
+            fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
+            dense_vectors.append(tf.reshape(fcd, [B, 1]))  # [B,1]
+
+        concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
+        
+#         shared_output = self.user_tower(concat_input, training=training)
+        # 为了监控中间层激活，手动执行 user_tower 的前向传播
+        x = concat_input
+        user_tower_activations = {}
+        for i, layer in enumerate(self.user_tower.layers):
+            x = layer(x, training=training)
+            # 使用一个在 tf.function 中唯一的名称
+            user_tower_activations[f"layer_{i}_{layer.name}"] = x
+        shared_output = x
+         
+        predictions = {}
+        for name, tower in self.task_towers.items():
+            # name is like "paid_treatment_30_tower"
+            pred_name = name.replace('_tower', '')
+            logit = tower(shared_output, training=training)
+            predictions[pred_name] = tf.reshape(logit, [-1])
+                
+        self._last_shared_output = shared_output
+        self._last_user_tower_activations = user_tower_activations
+        return predictions
+    
+    def compute_local_losses(self, predictions, labels): #和论文不一致啊
+        paid_loss = tf.constant(0.0, dtype=tf.float32)
+        cost_loss = tf.constant(0.0, dtype=tf.float32)
+
+        # 预先计算 treatment_mask（只一次）
+        treatment_idx = tf.cast(labels['treatment'], tf.int32)
+
+        for target_name in self.targets:
+            if target_name == 'paid':
+                pos_weight = self.paid_pos_weight
+            else:
+                pos_weight = self.cost_pos_weight
+            local_loss = tf.constant(0.0, dtype=tf.float32)
+            for treatment in self.treatment_order:
+                pred_name = f"{target_name}_treatment_{treatment}"
+                logit = predictions[pred_name]
+
+                # ✅ 一次性处理：避免多次调用 tf.minimum、tf.abs 等
+                out = tf.minimum(logit, 10.0)
+                label = tf.cast(labels[target_name], tf.float32) 
+                # label = labels[target_name]
+
+                # ✅ 使用广播和向量化计算，避免循环
+                term1 = -label * out
+                term2 = (1 + label) * (tf.maximum(out, 0) + tf.math.log(1 + tf.exp(-tf.abs(out))))
+                loss_per_sample = term1 + term2
+
+                # ✅ mask 只构造一次
+                treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)
+                # masked_loss = loss_per_sample * treatment_mask  # 直接乘，更高效
+                # 【核心修改】根据 pos_weight 对正样本的损失进行加权.当 label > 0 时，权重为 pos_weight，否则为 1.0
+
+                sample_weights = tf.where(label > 0, pos_weight, 1.0)
+                weighted_loss_per_sample = loss_per_sample * sample_weights
+                masked_loss = weighted_loss_per_sample * treatment_mask  # 使用加权后的损失
+                
+                # ✅ 累加 sum
+                local_loss += tf.reduce_mean(masked_loss)
+
+            if target_name == 'paid':
+                paid_loss += local_loss
+            else:
+                cost_loss += local_loss
+
+        return paid_loss, cost_loss
+    
+    def compute_local_losses_mse(self, predictions, labels):
+        paid_loss = tf.constant(0.0, dtype=tf.float32)
+        cost_loss = tf.constant(0.0, dtype=tf.float32)
+
+        # 预先计算 treatment_mask（只一次）
+        treatment_idx = tf.cast(labels['treatment'], tf.int32)
+
+        for target_name in self.targets:
+            local_loss = tf.constant(0.0, dtype=tf.float32)
+
+            for treatment in self.treatment_order:
+                pred_name = f"{target_name}_treatment_{treatment}"
+                pred = tf.cast(predictions[pred_name], tf.float32)
+                label = tf.cast(labels[target_name], tf.float32)
+
+                # MSE: (pred - label)^2
+                loss_per_sample = tf.math.squared_difference(pred, label)
+
+                treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)
+
+                masked_loss = loss_per_sample * treatment_mask
+                local_loss += tf.reduce_mean(masked_loss)
+
+            if target_name == 'paid':
+                paid_loss += local_loss
+            else:
+                cost_loss += local_loss
+
+        return paid_loss, cost_loss
+
+    def _add_summaries(self, name, tensor, step):
+        """辅助函数，用于在TensorBoard中记录张量的统计信息"""
+        tf.summary.scalar(f"{name}/mean", tf.reduce_mean(tensor), step=step)
+        tf.summary.scalar(f"{name}/max", tf.reduce_max(tensor), step=step)
+        tf.summary.scalar(f"{name}/min", tf.reduce_min(tensor), step=step)
+        tf.summary.histogram(f"{name}/histogram", tensor, step=step)
+
+    def train_step(self, data):
+    
+        features, labels = data
+
+        with tf.GradientTape(persistent=True) as tape:
+            # 1. 前向传播，只获取 predictions
+            predictions = self(features, training=True)
+            
+            # 从模型属性中获取中间激活值
+            shared_output = self._last_shared_output
+            user_tower_activations = self._last_user_tower_activations
+            
+            # --- 进阶监控 3: 主动错误检测 ---
+            for name, pred in predictions.items():
+                predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in prediction: {name}")
+
+            # 将模型的所有可训练变量分为两组：
+            # 1. 模型参数（如 Tower、Embedding 等）
+            # 2. GradNorm 的损失权重
+            model_variables = [v for v in self.trainable_variables if 'loss_weights' not in v.name]
+
+            paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
+            
+            # --- 进阶监控 3 (续): 检查最终loss ---
+            paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in paid_loss")
+            cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in cost_loss")
+            
+            # 2. 计算用于更新【模型参数】的损失
+            weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
+            # 对应您代码中的 total_loss
+            model_update_loss = weighted_task_loss * len(self.targets)
+        
+
+        # 4. 在 tape 上下文之外，分别计算两部分梯度
+        # 计算模型参数的梯度
+        model_gradients = tape.gradient(model_update_loss, model_variables)
+                
+        # Add
+        self.optimizer.apply_gradients(zip(model_gradients, self.trainable_variables))
+        
+        # --- 全面监控记录到 TensorBoard ---
+        step = self.optimizer.iterations
+        # 思路1: 监控前向传播
+        self._add_summaries("labels/paid", labels['paid'], step=step)
+        self._add_summaries("labels/cost", labels['cost'], step=step)
+        self._add_summaries("activations/shared_output",  shared_output, step=step)
+
+        # 监控损失分量
+        self._add_summaries("losses/1_paid_loss", paid_loss, step=step)
+        self._add_summaries("losses/2_cost_loss", cost_loss, step=step)
+        self._add_summaries("losses/3_weighted_task_loss", weighted_task_loss, step=step)
+        self._add_summaries("losses/5_model_update_loss", model_update_loss, step=step)
+        
+        # --- 进阶监控 1: 逐层激活与预测值 ---
+        # 监控 User Tower 的每一层激活
+        for name, activation in user_tower_activations.items():
+            self._add_summaries(f"activations/user_tower/{name}", activation, step=step)
+            
+        # 监控 Task Towers 的 logits
+        for name, pred_logit in predictions.items():
+            self._add_summaries(f"predictions/{name}_logit", pred_logit, step=step)
+
+        # --- 进阶监控 2: Embedding范数 ---
+        for slot_id, emb_layer in self.embedding_layers.items():
+            # emb_layer.weights[0] 是 embedding 矩阵
+            embedding_norm = tf.norm(emb_layer.weights[0], axis=1)
+            self._add_summaries(f"embeddings/slot_{slot_id}_norm", embedding_norm, step=step)
+                
+        # --- 进阶监控 4: 定位坏样本 (可选，会影响性能) ---
+        # 当 loss 超过一个阈值时，打印 user_id
+        # 注意: tf.print 在 graph 模式下需要配合 tf.cond
+        if 'id' in features:
+            tf.cond(
+                model_update_loss > 1000.0,  # 设置一个较高的阈值
+                lambda: tf.print("High loss detected! Loss:", model_update_loss, "UserIDs:", features['id'][:5], summarize=-1),
+                lambda: tf.constant(0) # 空操作
+            )
+
+        # 思路2: 监控梯度
+        # 过滤掉None的梯度
+        valid_gradients = [g for g in model_gradients if g is not None]
+        if valid_gradients:
+            global_norm = tf.linalg.global_norm(valid_gradients)
+            tf.summary.scalar("gradients/global_norm", global_norm, step=step)
+            # 抽样监控几个关键层的梯度
+            for i, grad in enumerate(valid_gradients):
+                if i % 10 == 0: # 每隔10个变量记录一次，避免日志过大
+                    self._add_summaries(f"gradients/var_{i}", grad, step=step)
+        # --- 调试结束 ---
+
+        # 6. persistent=True 时，手动删除 tape 释放资源
+        del tape
+
+        return {
+            "total_loss": model_update_loss, 
+            "weighted_task_loss": weighted_task_loss, 
+            "paid_loss": paid_loss, "cost_loss": cost_loss,
+        }
+
+    def test_step(self, data):
+        """验证步骤，不更新权重，只计算损失"""
+        features, labels = data
+        
+       # --- 终极调试：检查 Softmax 的行为 ---
+        # tf.print("\n--- 调试 val_step ---")
+        # 1. 检查 treatment 和标签
+        # tf.print("样本 treatment:", labels['treatment'][:5], summarize=-1)
+        # tf.print("paid 标签总和:", tf.reduce_sum(labels['paid']))
+
+        predictions = self(features, training=False)
+
+        # --- 为了调试，在这里重新计算 decision_loss 的关键部分并打印 ---
+        pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions.items()}
+        tau = self.tau if hasattr(self, 'tau') else 1.1
+        ratio = self.ratios[0] # 只看第一个 ratio 的情况来简化调试
+        
+        values = [pred_dict[f"paid_treatment_{t}"] - ratio * pred_dict[f"cost_treatment_{t}"] for t in self.treatment_order]
+        cancat_tensor = tf.stack(values, axis=1)
+        logits_before_softmax = cancat_tensor / tau
+        softmax_tensor = tf.nn.softmax(logits_before_softmax, axis=1)
+
+        treatment_idx = tf.cast(labels['treatment'], tf.int32)
+        mask_list = [tf.reshape(tf.cast(tf.equal(t, treatment_idx), tf.float32), [-1, 1]) for t in self.treatment_order]
+        mask_tensor = tf.concat(mask_list, axis=1)
+        
+        # 2. 检查 mask_tensor (已知是正确的，但保留以作对比)
+        # tf.print("样本 mask_tensor:", mask_tensor[:5], summarize=-1)
+
+        # 3. 【关键】检查 softmax 的输入和输出
+        # tf.print("【关键】Softmax 输入 (Logits):", logits_before_softmax[:5], summarize=-1)
+        # tf.print("【关键】Softmax 输出 (Probs):", softmax_tensor[:5], summarize=-1)
+
+        # 4. 将它们与 mask 相乘，查看结果
+        masked_softmax = softmax_tensor * mask_tensor
+        # tf.print("【关键】Masked Softmax Probs:", masked_softmax[:5], summarize=-1)
+        # tf.print("【关键】Masked Softmax Probs (总和):", tf.reduce_sum(masked_softmax))
+        
+        # tf.print("--- 调试结束 ---")
+        # --- 调试代码结束 ---
+        
+        for name, pred in predictions.items():
+            predictions[name] = tf.debugging.check_numerics(pred, f"NaN/Inf in validation prediction: {name}")
+
+        paid_loss, cost_loss = self.compute_local_losses(predictions, labels)
+        
+        paid_loss = tf.debugging.check_numerics(paid_loss, "NaN/Inf in val_paid_loss")
+        cost_loss = tf.debugging.check_numerics(cost_loss, "NaN/Inf in val_cost_loss")
+
+        weighted_task_loss = 0.5 * paid_loss + 0.5 * cost_loss
+        model_update_loss = weighted_task_loss * len(self.targets)
+
+        # 移除返回字典键中的 "val_" 前缀，Keras 会自动添加
+        return {
+            "total_loss": model_update_loss,
+            "weighted_task_loss": weighted_task_loss, 
+            "paid_loss": paid_loss, 
+            "cost_loss": cost_loss,
+        }
