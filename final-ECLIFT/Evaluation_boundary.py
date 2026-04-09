@@ -123,9 +123,17 @@ config = {
     'auuc_save_path': "result/result_auuc.json", #保存好坐标点，以便后续画图
 
     # ===== 新增：决策边界评测配置 =====
-    'lambda_star': 0.1,          # 全局阈值 λ*
+    'lambda_star': 0.8,          # 全局阈值 λ*
     'boundary_ratio': 0.1,       # 取 |u*(x)| 最小的 10% 作为边界样本
     'boundary_eps': None,        # 若不为 None，则优先使用 |u*(x)| < eps
+
+    # ===== 新增：边界实验方案切换 =====
+    'boundary_eval_scheme': 'proposal_v2',   # 可选: 'legacy' / 'proposal_v2'
+
+    # ===== 新增：proposal_v2 噪声注入配置 =====
+    'noise_mean': 0.0,
+    'noise_std': 0.01,                       # 微小方差，可自行调
+    'noise_random_seed': 42,
 }
 # # 训练集上试试
 # config = {
@@ -173,11 +181,11 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
     "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
+    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
     
     # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
     # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
@@ -385,6 +393,87 @@ def evaluate_boundary_metrics(
     return metrics, eval_df
 # ==================== 决策边界评测逻辑结束 ====================
 
+# ==================== 新实验方案：proposal_v2 ====================
+def add_gaussian_noise(x: np.ndarray,
+                       mean: float = 0.0,
+                       std: float = 0.01,
+                       seed: Optional[int] = 42) -> np.ndarray:
+    """
+    对输入数组注入高斯噪声：N(mean, std^2)
+    """
+    rng = np.random.default_rng(seed)
+    noise = rng.normal(loc=mean, scale=std, size=x.shape)
+    return x + noise
+
+
+def evaluate_boundary_metrics_proposal_v2(
+    df: pd.DataFrame,
+    lambda_star: float,
+    boundary_score_col: str = 'oracle_utility_clean',
+    pred_utility_col: str = 'pred_utility_noisy',
+    eps: Optional[float] = None,
+    boundary_ratio: Optional[float] = 0.1,
+):
+    """
+    按图片中的新实验方案评测：
+
+    1) 对每个模型，先用模型自己的“干净预测值”定义 Oracle:
+       oracle_utility_clean = (r1_hat - r0_hat) - lambda_star * (c1_hat - c0_hat)
+
+    2) 决策边界：
+       根据该模型自己的 oracle_utility_clean 划分边界样本 / 安全样本
+
+    3) 注入噪声：
+       对预测值注入 N(0, sigma^2) 高斯噪声，得到 pred_utility_noisy
+
+    4) 统计：
+       - 边界样本上的符号翻转率
+       - boundary / safe / all 上的 MSE
+       其中“现在是注入噪声前的视为 Oracle”
+    """
+    eval_df = df.copy()
+
+    u_oracle = eval_df[boundary_score_col].values
+    u_pred = eval_df[pred_utility_col].values
+
+    boundary_mask = get_boundary_mask(
+        u_star=u_oracle,
+        eps=eps,
+        boundary_ratio=boundary_ratio
+    )
+    safe_mask = ~boundary_mask
+
+    if boundary_mask.sum() > 0:
+        inversion_rate = np.mean(
+            sign_binary(u_pred[boundary_mask]) != sign_binary(u_oracle[boundary_mask])
+        )
+        mse_boundary = np.mean((u_pred[boundary_mask] - u_oracle[boundary_mask]) ** 2)
+    else:
+        inversion_rate = np.nan
+        mse_boundary = np.nan
+
+    mse_safe = np.mean((u_pred[safe_mask] - u_oracle[safe_mask]) ** 2) if safe_mask.sum() > 0 else np.nan
+    mse_all = np.mean((u_pred - u_oracle) ** 2)
+
+    eval_df['is_boundary'] = boundary_mask
+    eval_df['is_safe'] = safe_mask
+
+    metrics = {
+        'eval_scheme': 'proposal_v2',
+        'lambda_star': float(lambda_star),
+        'num_total': int(len(eval_df)),
+        'num_boundary': int(boundary_mask.sum()),
+        'num_safe': int(safe_mask.sum()),
+        'boundary_ratio_actual': float(boundary_mask.mean()),
+        'argmax_inversion_rate_boundary': float(inversion_rate) if not np.isnan(inversion_rate) else np.nan,
+        'mse_boundary': float(mse_boundary) if not np.isnan(mse_boundary) else np.nan,
+        'mse_safe': float(mse_safe) if not np.isnan(mse_safe) else np.nan,
+        'mse_all': float(mse_all),
+    }
+
+    return metrics, eval_df
+# ==================== 新实验方案结束 ====================
+
 # In[16]:
 
 # --- 评估流程 (已完善) 倾向于每一个model单独计算完metric，进行数据保留后统一画图（因为模型输出接口不一致）---
@@ -489,28 +578,46 @@ for model_path in model_paths_DFCL:
     # 6. 整合为DataFrame
     print("正在将所有结果整合到DataFrame...")
     lambda_star = config['lambda_star']
-    pred_utility_lambda = np.where(
+
+    # ===== 旧方案中用到的 factual-branch utility（保留，方便兼容旧逻辑）=====
+    pred_utility_lambda_legacy = np.where(
         final_treatment == 1,
         final_treat_paid - lambda_star * final_treat_cost,
         final_ctrl_paid - lambda_star * final_ctrl_cost
     )
+
+    # ===== 新方案：每个模型自己的预测增量效用，作为“干净 Oracle” =====
+    # û_clean(x) = (r1_hat - r0_hat) - λ* (c1_hat - c0_hat)
+    oracle_utility_clean = final_uplift_paid - lambda_star * final_uplift_cost
+
+    # ===== 新方案：在预测值上注入微小高斯噪声 =====
+    pred_utility_noisy = add_gaussian_noise(
+        oracle_utility_clean,
+        mean=config.get('noise_mean', 0.0),
+        std=config.get('noise_std', 0.01),
+        seed=config.get('noise_random_seed', 42),
+    )
+
     eval_df = pd.DataFrame({
         'paid': final_paid,
         'cost': final_cost,
         'treatment': final_treatment,
         'uplift': final_uplifts,
-        'roi':final_rois,
+        'roi': final_rois,
         'treat_paid': final_treat_paid,
         'treat_cost': final_treat_cost,
         'ctrl_paid': final_ctrl_paid,
         'ctrl_cost': final_ctrl_cost,
-        'uplift_paid': final_uplift_paid, # new
-        'uplift_cost': final_uplift_cost, # new
+        'uplift_paid': final_uplift_paid,
+        'uplift_cost': final_uplift_cost,
 
-        # ===== 新增：固定 λ* 下的预测效用 û(x) =====
-        # û(x) = uplift_paid - λ* uplift_cost
-        # 'pred_utility_lambda': final_uplift_paid - lambda_star * final_uplift_cost,
-        'pred_utility_lambda': pred_utility_lambda,
+        # ===== 旧方案保留 =====
+        'pred_utility_lambda': pred_utility_lambda_legacy,
+
+        # ===== 新方案字段 =====
+        'oracle_utility_clean': oracle_utility_clean,
+        'pred_utility_noisy': pred_utility_noisy,
+        'noise_delta': pred_utility_noisy - oracle_utility_clean,
     })
     
     with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
@@ -519,18 +626,32 @@ for model_path in model_paths_DFCL:
         print(eval_df.head())
         eval_df['treatment'] = eval_df['treatment'].astype(int)
         
-        # ===== 新增：决策边界评测 =====
+                # ===== 决策边界评测：支持 legacy / proposal_v2 两套方案切换 =====
         print("\n" + "-"*10 + " 决策边界评测 " + "-"*10)
+        eval_scheme = config.get('boundary_eval_scheme', 'proposal_v2')
+        print(f"当前评测方案: {eval_scheme}")
 
-        boundary_metrics, eval_df = evaluate_boundary_metrics(
-            df=eval_df,
-            lambda_star=config['lambda_star'],
-            pred_utility_col='pred_utility_lambda',
-            true_reward_col='paid',
-            true_cost_col='cost',
-            eps=config.get('boundary_eps', None),
-            boundary_ratio=config.get('boundary_ratio', 0.1),
-        )
+        if eval_scheme == 'legacy':
+            boundary_metrics, eval_df = evaluate_boundary_metrics(
+                df=eval_df,
+                lambda_star=config['lambda_star'],
+                pred_utility_col='pred_utility_lambda',
+                true_reward_col='paid',
+                true_cost_col='cost',
+                eps=config.get('boundary_eps', None),
+                boundary_ratio=config.get('boundary_ratio', 0.1),
+            )
+        elif eval_scheme == 'proposal_v2':
+            boundary_metrics, eval_df = evaluate_boundary_metrics_proposal_v2(
+                df=eval_df,
+                lambda_star=config['lambda_star'],
+                boundary_score_col='oracle_utility_clean',   # 注入噪声前视为 Oracle
+                pred_utility_col='pred_utility_noisy',       # 注入噪声后的预测值
+                eps=config.get('boundary_eps', None),
+                boundary_ratio=config.get('boundary_ratio', 0.1),
+            )
+        else:
+            raise ValueError(f"未知 boundary_eval_scheme: {eval_scheme}")
 
         print(f"lambda*: {boundary_metrics['lambda_star']:.6f}")
         print(f"总样本数: {boundary_metrics['num_total']}")
@@ -538,17 +659,28 @@ for model_path in model_paths_DFCL:
         print(f"安全样本数: {boundary_metrics['num_safe']}")
         print(f"实际边界样本占比: {boundary_metrics['boundary_ratio_actual']:.6f}")
         print(f"Argmax Inversion Rate (Boundary): {boundary_metrics['argmax_inversion_rate_boundary']:.6f}")
-        print(f"Local MSE (Boundary): {boundary_metrics['mse_boundary']:.6f}")
-        print(f"Local MSE (Safe): {boundary_metrics['mse_safe']:.6f}")
-        print(f"Global MSE: {boundary_metrics['mse_all']:.6f}")
+        print(f"MSE (Boundary): {boundary_metrics['mse_boundary']:.6f}")
+        print(f"MSE (Safe): {boundary_metrics['mse_safe']:.6f}")
+        print(f"MSE (All): {boundary_metrics['mse_all']:.6f}")
+
+        if eval_scheme == 'proposal_v2':
+            print(f"噪声均值: {config.get('noise_mean', 0.0)}")
+            print(f"噪声标准差: {config.get('noise_std', 0.01)}")
 
         # 保存明细，便于后续分析
-        boundary_detail_path = f"{model_path}/result/boundary_eval_detail_lambda_{config['lambda_star']}.csv"
+        scheme_name = config.get('boundary_eval_scheme', 'proposal_v2')
+
+        boundary_detail_path = (
+            f"{model_path}/result/"
+            f"boundary_eval_detail_{scheme_name}_lambda_{config['lambda_star']}.csv"
+        )
         eval_df.to_csv(boundary_detail_path, index=False, encoding='utf-8-sig')
         print(f"边界评测明细已保存至: {boundary_detail_path}")
 
-        # 保存 summary json
-        boundary_summary_path = f"{model_path}/result/boundary_eval_summary_lambda_{config['lambda_star']}.json"
+        boundary_summary_path = (
+            f"{model_path}/result/"
+            f"boundary_eval_summary_{scheme_name}_lambda_{config['lambda_star']}.json"
+        )
         with open(boundary_summary_path, 'w', encoding='utf-8') as f:
             json.dump(boundary_metrics, f, indent=4, ensure_ascii=False)
         print(f"边界评测汇总已保存至: {boundary_summary_path}")

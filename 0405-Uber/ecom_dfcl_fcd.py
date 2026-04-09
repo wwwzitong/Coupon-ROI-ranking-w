@@ -41,9 +41,9 @@ DENSE_FEATURE_NAME = [f'f{i}' for i in range(46)]
 SPARSE_FEATURE_NAME_SLOT_ID = {}
 # SPARSE_FEATURE_NAME_SLOT_ID = {name: idx for idx, name in enumerate(SPARSE_FEATURE_NAME)}
 statistical_config={
-    'N':343176,
-    'N1':160841,
-    'N0':182335
+    'N':975868,
+    'N1':390813,
+    'N0':585055
 }
 
 
@@ -55,8 +55,8 @@ class EcomDFCL_v3(tf.keras.Model): # std+ifdl一系列clip、maximum+2pos
     def __init__(self, rho=0.1, alpha=1.2, dense_stats=None, fcd_mode='log1p', loss_function='2pll', tau=1.2, batch_sum_mean='sum', max_multiplier=1.0, **kwargs):
         super().__init__(**kwargs)
         self.tau = tau
-        # self.paid_pos_weight = 97.21/(100-97.21)
-        # self.cost_pos_weight = 51.76/(100-51.76)
+        # self.paid_pos_weight = 52.60/(100-52.60)
+        # self.cost_pos_weight = 69.00/(100-69.00)
         self.paid_pos_weight = 1.0
         self.cost_pos_weight = 1.0
         self.alpha = alpha #prediction loss前面的系数

@@ -20,8 +20,17 @@
 # python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 100 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=100_seed42
 
 
-python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.3_seed42
+# python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.3_seed42
 
-python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.2 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.2_seed42
+# python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.2 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.2_seed42
 
-python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.1 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.1_seed42
+# python train.py --seed 42 --model_class_name EcomDFCL_regretNet_rplusc --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --tau 0.1 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.1_seed42
+
+
+
+
+# lambda
+
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_l50
+
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_l10

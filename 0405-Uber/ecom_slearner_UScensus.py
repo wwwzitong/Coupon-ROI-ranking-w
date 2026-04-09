@@ -42,9 +42,9 @@ SPARSE_FEATURE_NAME = []
 SPARSE_FEATURE_NAME_SLOT_ID = {}
 # SPARSE_FEATURE_NAME_SLOT_ID = {name: idx for idx, name in enumerate(SPARSE_FEATURE_NAME)}
 statistical_config={
-    'N':343176,
-    'N1':160841,
-    'N0':182335
+    'N':975868,
+    'N1':390813,
+    'N0':585055
 }
 
 # # 强制UTF-8编码
@@ -59,8 +59,8 @@ class SLearner(tf.keras.Model): # std+2pos
     """
     def __init__(self, rho=0.1, alpha=1.0, batch_sum_mean='mean', loss_function='2pll', dense_stats=None, fcd_mode='log1p', max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
-        # self.paid_pos_weight = 97.21/(100-97.21)
-        # self.cost_pos_weight = 51.76/(100-51.76)
+        # self.paid_pos_weight = 52.60/(100-52.60)
+        # self.cost_pos_weight = 69.00/(100-69.00)
         self.paid_pos_weight = 1.0
         self.cost_pos_weight = 1.0
         

@@ -57,7 +57,7 @@ set_seeds(42)  # 你可以更改为任何固定值
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_UScensus import *
+from data_utils_ECLIFT import *
 
 # 将输出保存到文件
 
@@ -116,8 +116,8 @@ def tee_output(filepath, mode="a", encoding="utf-8"):
 
 
 config = {
-    'eval_data': '../data/census1990_test.csv',
-    'batch_size': 1024,
+    'eval_data': '../data/ECLIFT_test.csv',
+    'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
     'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
@@ -168,11 +168,11 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3_seed44",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed44",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed44",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44",
+    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
     
     # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
     # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
@@ -196,23 +196,57 @@ model_paths_DFCL = [
     # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=10_seed42",
 
 
-    # "./model/SLearner_mse_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_mse_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_mse_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_mse_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
-    # "./model/EcomDFCL_regretNet_rplusc_mse_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=2.0_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=5.0_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=10_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=100_seed42",
 
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.1_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.2_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.3_seed42",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.01_seed42",
+    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.02_seed42",
+    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.05_seed42",
+
+    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.0001_seed42",
+    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=100_seed42",
+
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_l10",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-4_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-5_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr5e-5_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr5e-4_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr5e-3_clip=5e3_tau=1.0",
+
+
+
 
 ]
 model_paths_else = [
+    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
+    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
+    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
+    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
 
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43",
+    
+    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0",
+    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0",
+
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.5_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.7_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.9_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.2_seed42",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.5_seed42",
 
 ]
 
@@ -969,33 +1003,32 @@ for model_path in model_paths_DFCL:
             print(f"已达到最大评估批次数 {max_batches_for_eval}，停止预测。")
             break
         # 在当前批次上进行预测
-        predictions_logits= model.predict(features_batch)
+        pred_outputs = model.predict(features_batch)
 
-        # ！！提取标签和计算Uplift
-        pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions_logits.items()}
-        pred_paid_treat = pred_dict['paid_treatment_1']
-        pred_cost_treat = pred_dict['cost_treatment_1']
-        
-        pred_paid_ctrl = pred_dict['paid_treatment_0']
-        pred_cost_ctrl = pred_dict['cost_treatment_0']
-        
-        # 计算uplift
-        num_samples = len(pred_paid_treat)
-        total_uplift_per_sample = np.zeros(num_samples)
+        # 1-step CCB: 直接使用 action=1 的预测概率作为 ranking score
+        pred_prob_action_1 = pred_outputs['prob_action_1']
+        pred_prob_action_0 = pred_outputs['prob_action_0']
 
-        for r in ratios:
-            uplift = pred_paid_treat - r*pred_cost_treat
-            total_uplift_per_sample += uplift
-        integrated_uplift_per_sample = total_uplift_per_sample / len(ratios)
-        
-        pred_paid_uplift = pred_dict['paid_treatment_1'] - pred_dict['paid_treatment_0']
-        pred_cost_uplift = pred_dict['cost_treatment_1'] - pred_dict['cost_treatment_0']
-        roi_tensor = tf.where(
-            pred_cost_uplift > 0,                      # 条件
-            tf.math.divide_no_nan(pred_paid_uplift, pred_cost_uplift), # 条件为 True 时的值
-            tf.zeros_like(pred_paid_uplift)            # 条件为 False 时的值
-        )
-        roi = roi_tensor.numpy()
+        # 如果返回的是 Tensor，这里转 numpy
+        if tf.is_tensor(pred_prob_action_1):
+            pred_prob_action_1 = pred_prob_action_1.numpy()
+        if tf.is_tensor(pred_prob_action_0):
+            pred_prob_action_0 = pred_prob_action_0.numpy()
+
+        # ranking score
+        integrated_uplift_per_sample = pred_prob_action_1
+
+        # 为了兼容你现有后续 DataFrame 字段名，先占位
+        num_samples = len(pred_prob_action_1)
+        pred_paid_uplift = np.zeros(num_samples, dtype=np.float32)
+        pred_cost_uplift = np.zeros(num_samples, dtype=np.float32)
+        roi = np.zeros(num_samples, dtype=np.float32)
+
+        # treat/ctrl 预测头也不再有，统一占位
+        pred_paid_treat = np.zeros(num_samples, dtype=np.float32)
+        pred_cost_treat = np.zeros(num_samples, dtype=np.float32)
+        pred_paid_ctrl = np.zeros(num_samples, dtype=np.float32)
+        pred_cost_ctrl = np.zeros(num_samples, dtype=np.float32)
 
         # 收集当前批次的预测uplift和真实标签
         all_uplifts.append(integrated_uplift_per_sample)
@@ -1033,14 +1066,19 @@ for model_path in model_paths_DFCL:
         'paid': final_paid,
         'cost': final_cost,
         'treatment': final_treatment,
+
+        # 1-step CCB 的真正 ranking score
         'uplift': final_uplifts,
-        'roi':final_rois,
+        'action1_prob': final_uplifts,
+
+        # 以下字段仅为兼容你现有绘图/日志逻辑，占位
+        'roi': final_rois,
         'treat_paid': final_treat_paid,
         'treat_cost': final_treat_cost,
         'ctrl_paid': final_ctrl_paid,
         'ctrl_cost': final_ctrl_cost,
-        'uplift_paid': final_uplift_paid, # new
-        'uplift_cost': final_uplift_cost, # new
+        'uplift_paid': final_uplift_paid,
+        'uplift_cost': final_uplift_cost,
     })
     
     with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
@@ -1056,10 +1094,15 @@ for model_path in model_paths_DFCL:
         aucc_score_2 = calculate_and_save_aucc(df=eval_df)
         print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
 
-        print("正在计算 AUUC 指标...")
-        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
-        # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
-        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
+        print("正在生成 AUUC Plot (Action Probability Ranking on paid)...")
+        plot_auuc(df=eval_df, reward_col='paid', treatment_col='treatment', uplift_col='uplift')
+
+        print("正在生成 AUUC Plot (Action Probability Ranking on cost)...")
+        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift')
+
+        # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
+        # # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
+        # plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
 
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
         # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
@@ -1080,92 +1123,6 @@ for model_path in model_paths_DFCL:
         print("正在生成 AUCC Plot (ROI)...")
         get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
         
-        
-        
-        # 1127Addition：
-        # --- 新增评估逻辑 ---
-        from sklearn.metrics import roc_auc_score
-
-        print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
-        # 筛选出实验组数据用于评估
-        treatment_df = eval_df[eval_df['treatment'] == 1]
-
-        if treatment_df.empty:
-            print("实验组无数据，跳过额外评估。")
-        else:
-            # 1. 统计模型预估值平均值和真实值平均值对比
-            print("\n模型预估值与真实值均值对比 (实验组):")
-            avg_pred_paid = treatment_df['treat_paid'].mean()
-            avg_true_paid = treatment_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
-
-            avg_pred_cost = treatment_df['treat_cost'].mean()
-            avg_true_cost = treatment_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
-
-            # 2. 计算并展示 paid 和 cost 的 regAUC
-            print("\n计算 Regression AUC (regAUC, 在实验组上):")
-
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
-
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
-                
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
-                
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
-
-            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
-            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
-            
-            
-        # 筛选出对照组数据用于评估
-        control_df = eval_df[eval_df['treatment'] == 0]
-
-        if control_df.empty:
-            print("对照组无数据，跳过额外评估。")
-        else:
-            # 1. 统计模型预估值平均值和真实值平均值对比
-            print("\n模型预估值与真实值均值对比 (对照组):")
-            avg_pred_paid = control_df['ctrl_paid'].mean()
-            avg_true_paid = control_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
-
-            avg_pred_cost = control_df['ctrl_cost'].mean()
-            avg_true_cost = control_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
-
-            # 2. 计算并展示 paid 和 cost 的 regAUC
-            print("\n计算 Regression AUC (regAUC, 在对照组上):")
-
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
-
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
-                
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
-                
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
-
-            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
-            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
-        # --- 评估逻辑结束 ---
 
 
 # In[ ]:
@@ -1483,7 +1440,7 @@ def plot_aucc_from_json_v4(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json_v5(
+def plot_aucc_from_json(
     json_path: str,
     plot_path: str = 'aucc_comparison.pdf',
     model_names: Optional[List[str]] = None,
@@ -1610,187 +1567,7 @@ def plot_aucc_from_json_v5(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json(
-    json_path: str,
-    plot_path: str = 'aucc_comparison.pdf',
-    model_names: Optional[List[str]] = None,
-    model_name_map: Optional[Dict[str, str]] = None,
-    fallback_to_basename: bool = True,
-):
-    import json
-    from pathlib import Path
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from typing import Any, Dict, List, Optional
 
-    legend_fs = 16
-    axis_label_fs = legend_fs
-    tick_fs = legend_fs
-
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            all_results: Dict[str, Dict[str, Any]] = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"读取或解析文件 {json_path} 时出错: {e}")
-        return
-
-    if not all_results:
-        print("JSON 文件为空或格式不正确，无法绘图。")
-        return
-
-    model_name_map = model_name_map or {}
-
-    if model_names:
-        ordered_keys = [k for k in model_names if k in all_results]
-        not_found = [k for k in model_names if k not in all_results]
-        if not_found:
-            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
-    else:
-        ordered_keys = list(all_results.keys())
-
-    if not ordered_keys:
-        print("没有找到可供绘制的模型数据。")
-        return
-
-    plt.rcParams['pdf.fonttype'] = 42
-    plt.rcParams['ps.fonttype'] = 42
-    plt.rcParams.update({
-        "font.size": legend_fs,
-        "axes.labelsize": axis_label_fs,
-        "xtick.labelsize": tick_fs,
-        "ytick.labelsize": tick_fs,
-        "legend.fontsize": legend_fs,
-    })
-
-    OTHER_COLORS = [
-        "#1f77b4",
-        "#2ca02c",
-        "#9467bd",
-        "#ff7f0e",
-    ]
-    color_idx = 0
-
-    base_lw = 2.5
-    highlight_name = "CC-DFL"
-
-    plt.figure(figsize=(7.2, 5.4))
-
-    def build_feasible_curve(x_coords, y_coords):
-        """
-        只保留 x >= 0 的 feasible 区域；
-        若线段穿过 x=0，则做线性插值补一个交点，避免断裂。
-        """
-        x_arr = np.asarray(x_coords, dtype=float)
-        y_arr = np.asarray(y_coords, dtype=float)
-
-        feasible_x = []
-        feasible_y = []
-
-        for i in range(len(x_arr) - 1):
-            x1, y1 = x_arr[i], y_arr[i]
-            x2, y2 = x_arr[i + 1], y_arr[i + 1]
-
-            if x1 >= 0:
-                if len(feasible_x) == 0 or (feasible_x[-1] != x1 or feasible_y[-1] != y1):
-                    feasible_x.append(x1)
-                    feasible_y.append(y1)
-
-            # 穿过 x=0，补交点
-            if (x1 < 0 and x2 > 0) or (x1 > 0 and x2 < 0):
-                t = (0.0 - x1) / (x2 - x1)
-                y0 = y1 + t * (y2 - y1)
-                feasible_x.append(0.0)
-                feasible_y.append(y0)
-
-            if x2 >= 0:
-                feasible_x.append(x2)
-                feasible_y.append(y2)
-
-        # 去重
-        dedup_x, dedup_y = [], []
-        for x, y in zip(feasible_x, feasible_y):
-            if len(dedup_x) == 0 or (x != dedup_x[-1] or y != dedup_y[-1]):
-                dedup_x.append(x)
-                dedup_y.append(y)
-
-        return dedup_x, dedup_y
-
-    for model_key in ordered_keys:
-        data = all_results.get(model_key, {})
-        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
-            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
-            continue
-
-        display_name = model_name_map.get(model_key)
-        if not display_name:
-            display_name = Path(model_key).name if fallback_to_basename else model_key
-
-        is_highlight = (display_name == highlight_name)
-
-        if is_highlight:
-            color = "red"
-            raw_lw = base_lw * 1.2
-            feasible_lw = raw_lw
-            zorder_raw = 10
-            zorder_feasible = 11
-        else:
-            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
-            color_idx += 1
-            raw_lw = base_lw
-            feasible_lw = base_lw
-            zorder_raw = 1
-            zorder_feasible = 2
-
-        raw_x = data['x_coords']
-        raw_y = data['y_coords']
-
-        # 1) 原始 AUCC
-        plt.plot(
-            raw_x,
-            raw_y,
-            linestyle='-',
-            linewidth=raw_lw,
-            color=color,
-            marker=None,
-            zorder=zorder_raw,
-            label=f'{display_name} Raw ({data["aucc_score"]:.4f})',
-        )
-
-        # 2) feasible 区域 AUCC
-        feasible_x, feasible_y = build_feasible_curve(raw_x, raw_y)
-        if len(feasible_x) >= 2:
-            feasible_area = np.trapz(feasible_y, feasible_x)
-            plt.plot(
-                feasible_x,
-                feasible_y,
-                linestyle='--',
-                linewidth=feasible_lw,
-                color=color,
-                marker=None,
-                alpha=0.95,
-                zorder=zorder_feasible,
-                label=f'{display_name} Feasible ({feasible_area:.4f})',
-            )
-
-    # Random
-    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random', alpha=0.3)
-
-    # 参考线：标出 feasible 分界
-    plt.axvline(x=0.0, color='gray', linestyle=':', linewidth=1.5, alpha=0.8)
-
-    plt.xlabel('Incremental Cost(ΔC)', fontsize=axis_label_fs)
-    plt.ylabel('Incremental Reward(ΔR)', fontsize=axis_label_fs)
-
-    plt.xticks(fontsize=tick_fs)
-    plt.yticks(fontsize=tick_fs)
-
-    plt.legend(fontsize=legend_fs, frameon=True)
-    plt.grid(True, alpha=0.3)
-
-    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
-    plt.close()
-    print(f"AUCC 曲线对比图已保存至: {plot_path}")
-    
 #  'result_aucc.json'
 json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.pdf'

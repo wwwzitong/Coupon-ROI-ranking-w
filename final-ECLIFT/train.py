@@ -91,6 +91,7 @@ os.environ['PYTHONIOENCODING'] = 'utf-8'
 from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
 from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
 from ecom_slearner_ECLIFT import SLearner, DENSE_FEATURE_NAME
+from OneStepCCB import EcomOneStepCCB, DENSE_FEATURE_NAME
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -340,7 +341,10 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(tau=config['tau'], alpha=config['alpha'], loss_function=config['loss_function'], batch_sum_mean=config['batch_sum_mean'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    if config['model_class_name'] == "EcomOneStepCCB":
+        model = model_class(fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    else:
+        model = model_class(tau=config['tau'], alpha=config['alpha'], loss_function=config['loss_function'], batch_sum_mean=config['batch_sum_mean'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     
     if config['scheduler'] == 'raw':
         optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])

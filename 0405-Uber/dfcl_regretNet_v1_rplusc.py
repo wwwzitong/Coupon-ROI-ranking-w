@@ -40,9 +40,9 @@ SPARSE_FEATURE_NAME = []
 SPARSE_FEATURE_NAME_SLOT_ID = {}
 # SPARSE_FEATURE_NAME_SLOT_ID = {name: idx for idx, name in enumerate(SPARSE_FEATURE_NAME)}
 statistical_config={
-    'N':343176,
-    'N1':160841,
-    'N0':182335
+    'N':223428,
+    'N1':108523,
+    'N0':114905
 }
 
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):

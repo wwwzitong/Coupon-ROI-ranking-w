@@ -96,7 +96,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         self.sparse_feature_dim = 8 # TODO：简化为4
         self.dense_feature_dim = 1
         self.treatment_order = [1, 0] #处理组为15off，另一组是空白组
-        self.ratios = [i / 100.0 for i in range(5, 105, 5)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
+        self.ratios = [i / 100.0 for i in range(10, 110, 10)] #ratio也就是lambda，这里应该换成更为密集的，真正模拟积分。
         self.targets = ['paid', 'cost']
         
         self.total_samples = statistical_config['N']

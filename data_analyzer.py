@@ -4,12 +4,13 @@ import os
 
 def analyze_labels_and_treatment_from_csv(file_path):
     """
-    使用 Pandas 从 CSV 文件分析标签的稀疏度和按 treatment 分组的效果。
+    使用 Pandas 从 CSV 文件分析标签的稀疏度和按 treatment 分组的效果，
+    并额外分析 treatment=0 时 cost(visit) 的分布，判断是否存在极端大值。
     """
     print("开始分析标签和优惠策略效果...")
     
     # 为了性能，只读取分析所需的列
-    required_cols = ["conversion", "visit",  "treatment"]
+    required_cols = ["conversion", "visit", "treatment"]
     try:
         # 使用 Pandas 读取 CSV 文件
         df = pd.read_csv(file_path, usecols=required_cols)
@@ -28,9 +29,9 @@ def analyze_labels_and_treatment_from_csv(file_path):
     
     total_count = len(df)
     
-    report_lines.append("="*80)
+    report_lines.append("=" * 80)
     report_lines.append("标签与优惠策略分析报告 (基于 Pandas)")
-    report_lines.append("="*80)
+    report_lines.append("=" * 80)
     report_lines.append("\n--- 1. 目标标签分析 ---")
 
     if total_count > 0:
@@ -79,6 +80,77 @@ def analyze_labels_and_treatment_from_csv(file_path):
         
         line = f"{t_idx:<12} | {count_in_group:<12} | {proportion:<10.2%} | {avg_gmv:<12.4f} | {avg_cost:<12.4f}"
         report_lines.append(line)
+
+    # --- 3. treatment=0 时 cost(visit) 分布分析 ---
+    print("--> 正在执行 treatment=0 时 Cost 分布分析...")
+    report_lines.append("\n--- 3. Treatment=0 时 Cost(visit) 分布分析 ---")
+
+    df_t0 = df[df["treatment"] == 0]
+
+    if len(df_t0) == 0:
+        report_lines.append("没有 treatment=0 的样本。")
+    else:
+        t0_cost = df_t0["visit"].dropna()
+        t0_cost_non_zero = t0_cost[t0_cost > 0]
+
+        report_lines.append(f"treatment=0 样本数: {len(df_t0)}")
+        report_lines.append(f"其中 cost=0 的样本数: {(t0_cost == 0).sum()}")
+        report_lines.append(f"其中 cost>0 的样本数: {len(t0_cost_non_zero)}")
+
+        if len(t0_cost) > 0:
+            desc = t0_cost.describe(percentiles=[0.5, 0.9, 0.95, 0.99, 0.995, 0.999])
+
+            report_lines.append("\n[全部 t=0 cost 的描述统计]")
+            report_lines.append(f"mean   : {desc['mean']:.6f}")
+            report_lines.append(f"std    : {desc['std']:.6f}" if 'std' in desc else "std    : NA")
+            report_lines.append(f"min    : {desc['min']:.6f}")
+            report_lines.append(f"50%    : {desc['50%']:.6f}")
+            report_lines.append(f"90%    : {desc['90%']:.6f}")
+            report_lines.append(f"95%    : {desc['95%']:.6f}")
+            report_lines.append(f"99%    : {desc['99%']:.6f}")
+            report_lines.append(f"99.5%  : {desc['99.5%']:.6f}")
+            report_lines.append(f"99.9%  : {desc['99.9%']:.6f}")
+            report_lines.append(f"max    : {desc['max']:.6f}")
+
+            # IQR 异常值判定
+            q1 = t0_cost.quantile(0.25)
+            q3 = t0_cost.quantile(0.75)
+            iqr = q3 - q1
+            upper_bound_iqr = q3 + 1.5 * iqr
+            extreme_iqr = t0_cost[t0_cost > upper_bound_iqr]
+
+            # 用 99 分位做一个更直观的极端值参考
+            q99 = t0_cost.quantile(0.99)
+            extreme_q99 = t0_cost[t0_cost > q99]
+
+            report_lines.append("\n[极端值检测]")
+            report_lines.append(f"IQR 上界阈值: {upper_bound_iqr:.6f}")
+            report_lines.append(f"超过 IQR 上界的样本数: {len(extreme_iqr)}")
+            report_lines.append(f"超过 IQR 上界的样本占比: {len(extreme_iqr) / len(t0_cost):.2%}")
+
+            if len(extreme_iqr) > 0:
+                report_lines.append(f"IQR 异常值中的最大 cost: {extreme_iqr.max():.6f}")
+
+            report_lines.append(f"99分位阈值: {q99:.6f}")
+            report_lines.append(f"超过 99 分位的样本数: {len(extreme_q99)}")
+            report_lines.append(f"超过 99 分位的样本占比: {len(extreme_q99) / len(t0_cost):.2%}")
+
+        if len(t0_cost_non_zero) > 0:
+            desc_nz = t0_cost_non_zero.describe(percentiles=[0.5, 0.9, 0.95, 0.99, 0.995, 0.999])
+
+            report_lines.append("\n[仅对 t=0 且 cost>0 的描述统计]")
+            report_lines.append(f"mean   : {desc_nz['mean']:.6f}")
+            report_lines.append(f"std    : {desc_nz['std']:.6f}" if 'std' in desc_nz else "std    : NA")
+            report_lines.append(f"min    : {desc_nz['min']:.6f}")
+            report_lines.append(f"50%    : {desc_nz['50%']:.6f}")
+            report_lines.append(f"90%    : {desc_nz['90%']:.6f}")
+            report_lines.append(f"95%    : {desc_nz['95%']:.6f}")
+            report_lines.append(f"99%    : {desc_nz['99%']:.6f}")
+            report_lines.append(f"99.5%  : {desc_nz['99.5%']:.6f}")
+            report_lines.append(f"99.9%  : {desc_nz['99.9%']:.6f}")
+            report_lines.append(f"max    : {desc_nz['max']:.6f}")
+        else:
+            report_lines.append("treatment=0 下没有 cost>0 的样本。")
     
     return report_lines
 
