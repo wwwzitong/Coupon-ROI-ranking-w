@@ -255,7 +255,8 @@ class EcomOneStepCCB(tf.keras.Model):
         ips_weight = tf.clip_by_value(ips_weight, 0.0, self.ips_clip)
 
         utility = self._compute_utility(labels, ratio)
-        policy_value = tf.reduce_mean(ips_weight * utility)
+        # policy_value = tf.reduce_mean(ips_weight * utility)
+        policy_value = tf.reduce_sum(ips_weight * utility) / (tf.reduce_sum(ips_weight) + 1e-8)
         return policy_value, ips_weight, utility
 
     def _compute_entropy(self, outputs):

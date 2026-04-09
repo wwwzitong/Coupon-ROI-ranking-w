@@ -52,6 +52,8 @@ parser.add_argument('--batch_sum_mean', type=str, default='mean', help='sum/mean
 parser.add_argument('--loss_function', type=str, default='2pll', help='The expression of decision loss function.')
 parser.add_argument('--alpha', type=float, default=0.1, help='Alpha value for the loss function.')
 parser.add_argument('--seed', type=int, default=42, help='global random seed')
+parser.add_argument('--ips_clip', type=float, default=10, help='ips_clip')
+parser.add_argument('--entropy_coef', type=float, default=1e-3, help='entropy_coef')
 
 args = parser.parse_args()
 
@@ -137,6 +139,8 @@ config['batch_size'] = args.bs
 config['batch_sum_mean'] = args.batch_sum_mean
 config['loss_function'] = args.loss_function
 config['alpha'] = args.alpha
+config['ips_clip'] = args.ips_clip
+config['entropy_coef'] = args.entropy_coef
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
@@ -342,7 +346,7 @@ with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
     if config['model_class_name'] == "EcomOneStepCCB":
-        model = model_class(fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+        model = model_class(fcd_mode=config['fcd_mode'], dense_stats=dense_stats, entropy_coef = config['entropy_coef'], ips_clip = config['ips_clip'])
     else:
         model = model_class(tau=config['tau'], alpha=config['alpha'], loss_function=config['loss_function'], batch_sum_mean=config['batch_sum_mean'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     
