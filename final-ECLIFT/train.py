@@ -346,7 +346,7 @@ with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
     if config['model_class_name'] == "EcomOneStepCCB":
-        model = model_class(fcd_mode=config['fcd_mode'], dense_stats=dense_stats, entropy_coef = config['entropy_coef'], ips_clip = config['ips_clip'])
+        model = model_class(fcd_mode=config['fcd_mode'], dense_stats=dense_stats, entropy_coef = config['entropy_coef'], ips_clip = config['ips_clip'], tau=config['tau'])
     else:
         model = model_class(tau=config['tau'], alpha=config['alpha'], loss_function=config['loss_function'], batch_sum_mean=config['batch_sum_mean'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
     

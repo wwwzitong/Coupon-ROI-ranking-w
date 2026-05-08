@@ -3,9 +3,8 @@
 MODEL=EcomOneStepCCB
 
 for lr in 1e-3; do
-  for bs in 512; do
-  # for bs in 256; do
-    for ips_clip in 5; do
+  for bs in 256 512; do
+    for ips_clip in 5 10 20; do
       for entropy_coef in 1e-3 1e-2; do
         for tau in 0.5 1 2; do
           for clipnorm in 5e3; do

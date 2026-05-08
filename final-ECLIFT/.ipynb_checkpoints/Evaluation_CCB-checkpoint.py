@@ -168,85 +168,44 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=0.1_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=0.5_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=2_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=3_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=4_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=5_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=10_tau=1.0_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau0.5",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau1",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau2",
 
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.1_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.5_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=1_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=2_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=3_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=4_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=5_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=10_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau0.5",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau1",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau2",
 
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip10_ent1e-3_clipnorm5e3_tau1",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip10_ent1e-2_clipnorm5e3_tau1",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=2.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=5.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=10_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=100_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip20_ent1e-3_clipnorm5e3_tau1",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip20_ent1e-2_clipnorm5e3_tau1",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.1_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.2_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.3_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau1",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau1",
 
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.01_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.02_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.05_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau2",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau2",
 
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.0001_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=100_seed42",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-3_clipnorm5e3_tau0.5",
+    # "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip5_ent1e-2_clipnorm5e3_tau0.5",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_l10",
-    "./model/EcomOneStepCCB_bs256_step500_lr1e-4_clip=5e3_tau=1.0",
-    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_clip=5e3_tau=1.0",
-    "./model/EcomOneStepCCB_bs256_step500_lr1e-5_clip=5e3_tau=1.0",
-    "./model/EcomOneStepCCB_bs256_step500_lr5e-5_clip=5e3_tau=1.0",
-    "./model/EcomOneStepCCB_bs256_step500_lr5e-4_clip=5e3_tau=1.0",
-    "./model/EcomOneStepCCB_bs256_step500_lr5e-3_clip=5e3_tau=1.0",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-3_clipnorm5e3_tau1",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-2_clipnorm5e3_tau1",
 
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-3_clipnorm5e3_tau2",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-2_clipnorm5e3_tau2",
 
-
-
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-3_clipnorm5e3_tau0.5",
+    "./model/EcomOneStepCCB_bs256_step500_lr1e-3_ipsclip1_ent1e-2_clipnorm5e3_tau0.5",
 ]
+
 model_paths_else = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43",
-    
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0",
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0",
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.5_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.7_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=0.9_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.2_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.5_seed42",
 
 ]
 
