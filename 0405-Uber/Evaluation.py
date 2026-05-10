@@ -207,11 +207,12 @@ model_paths_DFCL = [
     # "./model/EcomDFCL_v3_wce_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
     # "./model/EcomDFCL_v3_wce_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
 ]
 model_paths_else = [
 
+    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
 
 
 ]
@@ -1483,7 +1484,7 @@ def plot_aucc_from_json_v4(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json_v5(
+def plot_aucc_from_json(
     json_path: str,
     plot_path: str = 'aucc_comparison.pdf',
     model_names: Optional[List[str]] = None,
@@ -1610,7 +1611,7 @@ def plot_aucc_from_json_v5(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json(
+def plot_aucc_from_json_v6(
     json_path: str,
     plot_path: str = 'aucc_comparison.pdf',
     model_names: Optional[List[str]] = None,

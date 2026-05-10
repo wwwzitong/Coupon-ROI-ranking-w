@@ -22,8 +22,8 @@ print("Raw columns:", X_raw.columns.tolist())
 # 根据论文设置的过滤条件：
 
 # 1) 仅保留有一个或多个孩子的人
-# mask_children = X_raw['iFertil'] <= 2
-mask_children = X_raw['iFertil'].notna() & (X_raw['iFertil'] <= 2) & (X_raw['iFertil'] > 0)
+# mask_children = X_raw['iFertil'] >= 1
+mask_children = X_raw['iFertil'].notna() & (X_raw['iFertil'] >= 1) & (X_raw['iFertil'] <= 5)
 
 # 2) 仅保留出生在美国的人
 mask_citizen = X_raw['iCitizen'].notna() & (X_raw['iCitizen'] == 0)
@@ -55,6 +55,8 @@ max_ifertil = df_filtered['iFertil'].astype(float).max()
 print("Max iFertil:", max_ifertil)
 # df_filtered['visit'] = (max_ifertil - df_filtered['iFertil'].astype(float)) * 0.1
 df_filtered['visit'] = df_filtered['iFertil'].astype(float)
+# original setting in the paper
+df_filtered['visit'] = - df_filtered['visit'] + 5
 
 print("Median hours:", median_hours)
 print(df_filtered[['treatment','conversion','visit']].head())
