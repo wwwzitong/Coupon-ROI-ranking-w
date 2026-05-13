@@ -24,40 +24,13 @@ import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# ==================== 设置随机种子确保可复现性 ====================
-def set_seeds(seed=42):
-    """
-    设置所有随机种子以确保实验可复现
-    Args:
-        seed: 随机种子值，默认为42
-    """
-    # 设置Python随机种子
-    random.seed(seed)
-    
-    
-    # 设置NumPy随机种子
-    np.random.seed(seed)
-    
-    # 设置TensorFlow随机种子
-    tf.random.set_seed(seed)
-    # 设置操作确定性（可能影响性能但提高可复现性）
-    os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-    
-    # 设置PYTHONHASHSEED
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    
-    print(f"已设置随机种子: {seed}")
-
-set_seeds(42)  # 你可以更改为任何固定值
-
 # from fsfc_mine_mx2 import * #自行生成fsfc文件（脚本放在data_flow中）
 # from data_utils_mx2 import *
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_UScensus import *
+from data_utils import *
 
 # 将输出保存到文件
 
@@ -114,13 +87,40 @@ def tee_output(filepath, mode="a", encoding="utf-8"):
             sys.stdout, sys.stderr = old_out, old_err
             f.close()
 
+# ==================== 设置随机种子确保可复现性 ====================
+def set_seeds(seed=42):
+    """
+    设置所有随机种子以确保实验可复现
+    Args:
+        seed: 随机种子值，默认为42
+    """
+    # 设置Python随机种子
+    random.seed(seed)
+    
+    
+    # 设置NumPy随机种子
+    np.random.seed(seed)
+    
+    # 设置TensorFlow随机种子
+    tf.random.set_seed(seed)
+    # 设置操作确定性（可能影响性能但提高可复现性）
+    os.environ['TF_DETERMINISTIC_OPS'] = '1'
+    os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+    
+    # 设置PYTHONHASHSEED
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    print(f"已设置随机种子: {seed}")
+
+set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
-    'eval_data': '../data/census1990_test.csv',
-    'batch_size': 1024,
+    'eval_data': './criteo_osrct/criteo_osrct_conversion_direct_alpha_2p0_complement.csv.gz',
+    'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
-    'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
+    'auuc_save_path': "result/result_auuc.json", #保存好坐标点，以便后续画图
+    'weight_col': '__complement_weight', # 新增：OSRCT complementary sample 测试权重
 }
 # # 训练集上试试
 # config = {
@@ -145,8 +145,17 @@ eval_samples = dataset.prepare_dataset(
 )
 
 # --- Step: 提取 drop_list 和 label_name_list ---
-label_name_list = ['treatment','paid','cost']
-drop_list = ['paid','cost']
+weight_col = config.get('weight_col', '__complement_weight')
+
+label_name_list = ['treatment', 'paid', 'cost', weight_col]
+
+# 注意：权重列和 OSRCT 构造元数据不能作为模型输入 feature
+drop_list = [
+    'paid', 'cost', weight_col,
+    '__sample_role', '__osrct_alpha',
+    '__p_ts1', '__p_accept', '__p_reject',
+    '__outcome_score'
+]
 
 # --- Step: 将 dataset 转换为 (features, labels) 格式 ---
 def _to_features_labels(parsed_example):
@@ -168,72 +177,24 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3_seed44",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10_seed44",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5_seed44",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100_seed44",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed44",
-    
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=0.1_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=0.5_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=2_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=3_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=4_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=5_tau=1.0_seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=10_tau=1.0_seed42",
-
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.1_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=0.5_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=1_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=2_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=3_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=4_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=5_seed42",
-    # "./model/rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_rho=10_seed42",
-
-
-    # "./model/SLearner_mse_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_mse_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_mse_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_mse_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
-    # "./model/EcomDFCL_regretNet_rplusc_mse_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10",
-    # "./model/EcomDFCL_v3_wce_3erl_bs256_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs256_step500_lr1e-3_clip=100_alpha=100",
-
-    "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_2pos",
-
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs256_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 ]
 model_paths_else = [
 
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0",
-
+    # "./model/SLearner_2pos_lr3_clip=100",
+    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
+    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
+    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
+    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5",
 
 ]
 
 model_name_map = {
-    # "./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3": "MTP",
-    # "./model/EcomDFCL_v3_wce_2pll_bs256_step500_lr1e-3_clip=5e3_alpha=10": "DFCL-PL",
-    # "./model/EcomDFCL_v3_wce_3erl_bs512_step500_lr1e-3_clip=100_alpha=0.1_tau=2.5": "DFCL-MER",
-    # "./model/EcomDFCL_v3_wce_4ifdl_bs512_step500_lr1e-3_clip=100_alpha=100": "DFCL-IFD",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0": "CC-DFL(Ours)",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0": "CC-DFL",
-
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed39":"seed39",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed40":"seed40",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed41":"seed41",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0":"seed42",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_seed43":"seed43",
-
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=1_tau=1_rho=0": "CC-DFL w/o QP",
-    # "./model/rplusc_wce_bs256_lr1e-4_clip=5e3_max=0_tau=1_rho=0": "CC-DFL w/o CP",
+    "./model/SLearner_2pos_lr3_clip=100": "MTP",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw": "DFCL-PL",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw": "DFCL-MER",
+    "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2": "DFCL-IFD",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5": "CC-DFL(Ours)",
 }
 
 # In[7]:
@@ -243,6 +204,80 @@ treatment_order = [1, 0] #处理组为15off，另一组是空白组
 ratios = [i / 100.0 for i in range(5, 105, 5)]
 aucc_save_path = config['aucc_save_path']
 auuc_save_path = config['auuc_save_path']
+
+
+EVAL_WEIGHT_COL = 'sample_weight'
+
+def _get_w(df, weight_col=EVAL_WEIGHT_COL):
+    if weight_col is None or weight_col not in df.columns:
+        return pd.Series(np.ones(len(df), dtype=np.float64), index=df.index)
+
+    w = pd.to_numeric(df[weight_col], errors='coerce').fillna(0.0).astype(np.float64)
+    w = w.replace([np.inf, -np.inf], 0.0)
+    w = w.clip(lower=0.0)
+
+    if w.sum() <= 0:
+        return pd.Series(np.ones(len(df), dtype=np.float64), index=df.index)
+
+    return w
+
+
+def _wmean(x, w):
+    x = pd.to_numeric(x, errors='coerce').astype(np.float64)
+    w = pd.to_numeric(w, errors='coerce').fillna(0.0).astype(np.float64)
+
+    mask = np.isfinite(x) & np.isfinite(w) & (w > 0)
+    if mask.sum() == 0:
+        return np.nan
+
+    return float(np.average(x[mask], weights=w[mask]))
+
+
+def _weighted_cumdiff_curve(
+    df_sorted,
+    reward_col,
+    cost_col=None,
+    treatment_col='treatment',
+    treatment_val=1,
+    control_val=0,
+    weight_col=EVAL_WEIGHT_COL,
+):
+    """
+    OSRCT complementary sample 加权累计 uplift 曲线。
+
+    ΔR_k = [E_w(R|T=1, top-k) - E_w(R|T=0, top-k)] * weighted_population_k
+    ΔC_k 同理。
+    """
+    w = _get_w(df_sorted, weight_col)
+
+    treat_mask = df_sorted[treatment_col].eq(treatment_val).astype(float)
+    ctrl_mask = df_sorted[treatment_col].eq(control_val).astype(float)
+
+    pop_w_cumsum = w.cumsum()
+
+    treat_w_cumsum = (w * treat_mask).cumsum().replace(0, np.nan)
+    ctrl_w_cumsum = (w * ctrl_mask).cumsum().replace(0, np.nan)
+
+    treat_reward_cumsum = (df_sorted[reward_col] * w * treat_mask).cumsum()
+    ctrl_reward_cumsum = (df_sorted[reward_col] * w * ctrl_mask).cumsum()
+
+    delta_reward = (
+        treat_reward_cumsum / treat_w_cumsum
+        - ctrl_reward_cumsum / ctrl_w_cumsum
+    ).fillna(0.0) * pop_w_cumsum
+
+    if cost_col is None:
+        return delta_reward, None, pop_w_cumsum
+
+    treat_cost_cumsum = (df_sorted[cost_col] * w * treat_mask).cumsum()
+    ctrl_cost_cumsum = (df_sorted[cost_col] * w * ctrl_mask).cumsum()
+
+    delta_cost = (
+        treat_cost_cumsum / treat_w_cumsum
+        - ctrl_cost_cumsum / ctrl_w_cumsum
+    ).fillna(0.0) * pop_w_cumsum
+
+    return delta_reward, delta_cost, pop_w_cumsum
 
 
 # 生成当前时间字符串
@@ -255,7 +290,7 @@ current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 
-def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', bins=100):
+def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', bins=100, weight_col=EVAL_WEIGHT_COL,):
     """
     reference：https://bytedance.larkoffice.com/docx/URpyd2iS9o8puxxvD7JcS3jUnkb?bk_entity_id=enterprise_7332387637669888004
     逐点排序并作图，无其他过滤逻辑。很考验数据本身的质量和模型的水平
@@ -268,19 +303,29 @@ def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col
     S = 0
     delta_C_prev = 0
 
-    # 提前准备掩码
-    treat_mask = df[treatment_col] == 1
-    ctrl_mask = df[treatment_col] == 0
+    # # 提前准备掩码
+    # treat_mask = df[treatment_col] == 1
+    # ctrl_mask = df[treatment_col] == 0
 
-    # 初始化累计和
-    treat_reward_cumsum = (df[reward_col] * treat_mask).cumsum()
-    ctrl_reward_cumsum = (df[reward_col] * ctrl_mask).cumsum()
-    treat_cost_cumsum = (df[cost_col] * treat_mask).cumsum()
-    ctrl_cost_cumsum = (df[cost_col] * ctrl_mask).cumsum()
+    # # 初始化累计和
+    # treat_reward_cumsum = (df[reward_col] * treat_mask).cumsum()
+    # ctrl_reward_cumsum = (df[reward_col] * ctrl_mask).cumsum()
+    # treat_cost_cumsum = (df[cost_col] * treat_mask).cumsum()
+    # ctrl_cost_cumsum = (df[cost_col] * ctrl_mask).cumsum()
 
-    # 预计算 ΔR_k 和 ΔC_k 序列
-    delta_R_list = treat_reward_cumsum - ctrl_reward_cumsum  # ΔR_k
-    delta_C_list = treat_cost_cumsum - ctrl_cost_cumsum      # ΔC_k
+    # # 预计算 ΔR_k 和 ΔC_k 序列
+    # delta_R_list = treat_reward_cumsum - ctrl_reward_cumsum  # ΔR_k
+    # delta_C_list = treat_cost_cumsum - ctrl_cost_cumsum      # ΔC_k
+
+    delta_R_list, delta_C_list, _ = _weighted_cumdiff_curve(
+        df,
+        reward_col=reward_col,
+        cost_col=cost_col,
+        treatment_col=treatment_col,
+        treatment_val=1,
+        control_val=0,
+        weight_col=weight_col,
+    )
 
     # Step 3-10: 主循环积分
     # S = ∑_{k=1}^{n} ΔR_k × (ΔC_k - ΔC_{k-1})
@@ -417,7 +462,7 @@ def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatmen
 # In[10]:
 
 
-def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv"):
+def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv", weight_col=EVAL_WEIGHT_COL,):
     '''
     公司另外一个版本的AUCC,分bins去作图，以bins中的第一个user作为落点依据。图会更加的平滑。无其他过滤逻辑。
     '''
@@ -431,24 +476,35 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
     # 将索引从1开始，方便后续计算累积用户数
     df_sorted.index = df_sorted.index + 1
 
-    # --- 第3步: 计算累积uplift (delta_gain, delta_cost) ---
-    is_treatment = (df_sorted[treatment_col] == treatment_val)
+    # # --- 第3步: 计算累积uplift (delta_gain, delta_cost) ---
+    # is_treatment = (df_sorted[treatment_col] == treatment_val)
     
-    cumsum_tr = is_treatment.cumsum()
-    cumsum_ct = df_sorted.index.values - cumsum_tr
+    # cumsum_tr = is_treatment.cumsum()
+    # cumsum_ct = df_sorted.index.values - cumsum_tr
     
-    # 为避免除以0，将累积数为0的替换为NaN，后续计算平均值时会自动忽略
-    cumsum_tr_safe = cumsum_tr.replace(0, np.nan)
-    cumsum_ct_safe = cumsum_ct.replace(0, np.nan)
+    # # 为避免除以0，将累积数为0的替换为NaN，后续计算平均值时会自动忽略
+    # cumsum_tr_safe = cumsum_tr.replace(0, np.nan)
+    # cumsum_ct_safe = cumsum_ct.replace(0, np.nan)
 
-    cumsum_gain_tr = (df_sorted[reward_col] * is_treatment).cumsum()
-    cumsum_gain_ct = (df_sorted[reward_col] * ~is_treatment).cumsum()
-    cumsum_cost_tr = (df_sorted[cost_col] * is_treatment).cumsum()
-    cumsum_cost_ct = (df_sorted[cost_col] * ~is_treatment).cumsum()
+    # cumsum_gain_tr = (df_sorted[reward_col] * is_treatment).cumsum()
+    # cumsum_gain_ct = (df_sorted[reward_col] * ~is_treatment).cumsum()
+    # cumsum_cost_tr = (df_sorted[cost_col] * is_treatment).cumsum()
+    # cumsum_cost_ct = (df_sorted[cost_col] * ~is_treatment).cumsum()
 
-    # 计算累积uplift
-    df_sorted['delta_gain'] = (cumsum_gain_tr / cumsum_tr_safe - cumsum_gain_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
-    df_sorted['delta_cost'] = (cumsum_cost_tr / cumsum_tr_safe - cumsum_cost_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+    # # 计算累积uplift
+    # df_sorted['delta_gain'] = (cumsum_gain_tr / cumsum_tr_safe - cumsum_gain_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+    # df_sorted['delta_cost'] = (cumsum_cost_tr / cumsum_tr_safe - cumsum_cost_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+
+    # --- 第3步: 加权计算累计 uplift ---
+    df_sorted['delta_gain'], df_sorted['delta_cost'], df_sorted['cum_weight'] = _weighted_cumdiff_curve(
+        df_sorted,
+        reward_col=reward_col,
+        cost_col=cost_col,
+        treatment_col=treatment_col,
+        treatment_val=treatment_val,
+        control_val=control_val,
+        weight_col=weight_col,
+    )
 
     # --- 第4步: 按 delta_cost 进行分桶 ---
     # 完全遵循 metric.py 中的分桶逻辑
@@ -529,7 +585,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
 # In[11]:
 
 
-def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model'):
+def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model', weight_col=EVAL_WEIGHT_COL,):
     """
     计算AUCC
     :param pdf: 计算aucc的pandas df
@@ -542,18 +598,31 @@ def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cos
     """
     aucc_dict = {}
     aucc_dict[pred_roi_col] = {}
-    df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[[gain_col, cost_col, pred_roi_col, treatment_col]]
+    # df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[[gain_col, cost_col, pred_roi_col, treatment_col]]
+    df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[
+        [gain_col, cost_col, pred_roi_col, treatment_col, weight_col]
+    ]
     df = df.sort_values(pred_roi_col, ascending=False).reset_index(drop=True)
     df.index = df.index + 1
-    cumsum_tr = (df[treatment_col] != 0).cumsum().replace(0, np.nan)
-    # print(cumsum_tr)
-    cumsum_ct = (df.index.values - cumsum_tr).replace(0, np.nan)
-    cumsum_gain_tr = (df[gain_col] * (df[treatment_col] != 0)).cumsum()
-    cumsum_gain_ct = (df[gain_col] * (df[treatment_col] == 0)).cumsum()
-    cumsum_cost_tr = (df[cost_col] * (df[treatment_col] != 0)).cumsum()
-    cumsum_cost_ct = (df[cost_col] * (df[treatment_col] == 0)).cumsum()
-    df["delta_gain"] = (cumsum_gain_tr / cumsum_tr - cumsum_gain_ct / cumsum_ct).fillna(0) * df.index.values
-    df["delta_cost"] = (cumsum_cost_tr / cumsum_tr - cumsum_cost_ct / cumsum_ct).fillna(0) * df.index.values 
+    # cumsum_tr = (df[treatment_col] != 0).cumsum().replace(0, np.nan)
+    # # print(cumsum_tr)
+    # cumsum_ct = (df.index.values - cumsum_tr).replace(0, np.nan)
+    # cumsum_gain_tr = (df[gain_col] * (df[treatment_col] != 0)).cumsum()
+    # cumsum_gain_ct = (df[gain_col] * (df[treatment_col] == 0)).cumsum()
+    # cumsum_cost_tr = (df[cost_col] * (df[treatment_col] != 0)).cumsum()
+    # cumsum_cost_ct = (df[cost_col] * (df[treatment_col] == 0)).cumsum()
+    # df["delta_gain"] = (cumsum_gain_tr / cumsum_tr - cumsum_gain_ct / cumsum_ct).fillna(0) * df.index.values
+    # df["delta_cost"] = (cumsum_cost_tr / cumsum_tr - cumsum_cost_ct / cumsum_ct).fillna(0) * df.index.values 
+    
+    df["delta_gain"], df["delta_cost"], df["cum_weight"] = _weighted_cumdiff_curve(
+        df,
+        reward_col=gain_col,
+        cost_col=cost_col,
+        treatment_col=treatment_col,
+        treatment_val=treatment_index,
+        control_val=0,
+        weight_col=weight_col,
+    )
     
     # --- 增加的归一化逻辑 ---
     # 获取总的增量收益和成本，用于归一化
@@ -670,7 +739,7 @@ def calculate_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col=
 # In[13]:
 
 
-def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift'):
+def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift', weight_col=EVAL_WEIGHT_COL,):
     """
     计算归一化的累计Uplift曲线下面积 (Normalized Cumulative AUUC)。
     """
@@ -678,36 +747,32 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     df_sorted = df.sort_values(uplift_col, ascending=False).reset_index(drop=True)
     n_total = len(df_sorted)
 
-    # Step 2: 预先计算实验组和对照组的掩码及累计和，提高效率
-    treat_mask = (df_sorted[treatment_col] == 1)
-    ctrl_mask = (df_sorted[treatment_col] == 0)
+    # Step 2-3: OSRCT complementary sample 加权累计 uplift
+    cumulative_uplift, _, pop_w_cumsum = _weighted_cumdiff_curve(
+        df_sorted,
+        reward_col=reward_col,
+        cost_col=None,
+        treatment_col=treatment_col,
+        treatment_val=1,
+        control_val=0,
+        weight_col=weight_col,
+    )
 
-    # 计算累计用户数
-    n_treat_cumsum = treat_mask.cumsum()
-    n_ctrl_cumsum = ctrl_mask.cumsum()
+    # Step 4: 加权 population fraction
+    total_weight = pop_w_cumsum.iloc[-1] if len(pop_w_cumsum) > 0 else 0
+    if total_weight > 0:
+        population_fraction = (pop_w_cumsum / total_weight).to_numpy()
+    else:
+        population_fraction = np.arange(1, n_total + 1) / max(n_total, 1)
 
-    # 计算累计收益
-    reward_treat_cumsum = (df_sorted[reward_col] * treat_mask).cumsum()
-    reward_ctrl_cumsum = (df_sorted[reward_col] * ctrl_mask).cumsum()
-
-    # 防止除零错误
-    n_treat_cumsum_safe = n_treat_cumsum.replace(0, 1e-9)
-    n_ctrl_cumsum_safe = n_ctrl_cumsum.replace(0, 1e-9)
-
-    # Step 3: 计算累计Uplift (Incremental Uplift)
-    # 这是与“平均Uplift”方法的核心区别
-    cumulative_uplift = (reward_treat_cumsum / n_treat_cumsum_safe - reward_ctrl_cumsum / n_ctrl_cumsum_safe) * (n_treat_cumsum + n_ctrl_cumsum)
-
-    # Step 4: 归一化坐标轴
-    population_fraction = np.arange(1, n_total + 1) / n_total
     x_coords = [0] + population_fraction.tolist()
-    
-    # Y轴通过除以总Uplift进行归一化
+
     total_uplift = cumulative_uplift.iloc[-1]
     if total_uplift != 0:
         y_coords_normalized = (cumulative_uplift / total_uplift).tolist()
     else:
         y_coords_normalized = [0] * n_total
+
     y_coords = [0] + y_coords_normalized
     
     # Step 5: 计算AUUC (曲线下面积) 和基线AUUC
@@ -776,7 +841,7 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     ax.plot(
         x_coords, y_coords,
         linewidth=2.8,
-        label=f'CC-DFL(Ours) (AUUC = {auuc_score:.4f})'
+        label='CC-DFL(Ours)'
     )
 
     # Random baseline：黑色虚线对角线（示例图风格）
@@ -820,13 +885,12 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     print(results)
 
 
-
 # ## Uplift Bar Plot
 
 # In[14]:
 
 
-def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatment', uplift_col='uplift', bins=20, model_path='unknown_model'):
+def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatment', uplift_col='uplift', bins=20, model_path='unknown_model', weight_col=EVAL_WEIGHT_COL):
     """
     计算并绘制 Uplift Bar Plot。
 
@@ -866,53 +930,76 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
         treat_mask = group[treatment_col] == 1
         ctrl_mask = group[treatment_col] == 0
 
-        # 计算每个分箱中实验组和对照组的平均收益
-        mean_reward_treat = group.loc[treat_mask, target_col].mean() if treat_mask.sum() > 0 else 0
-        mean_reward_ctrl = group.loc[ctrl_mask, target_col].mean() if ctrl_mask.sum() > 0 else 0
+        # # 计算每个分箱中实验组和对照组的平均收益
+        # mean_reward_treat = group.loc[treat_mask, target_col].mean() if treat_mask.sum() > 0 else 0
+        # mean_reward_ctrl = group.loc[ctrl_mask, target_col].mean() if ctrl_mask.sum() > 0 else 0
         
-        # 计算真实 uplift
+        # # 计算真实 uplift
+        # actual_uplift = mean_reward_treat - mean_reward_ctrl
+        # actual_uplifts_per_bin.append(actual_uplift)
+
+        # # 计算该分箱的平均预测uplift
+        # predicted_uplift = group[uplift_col].mean()
+        # predicted_uplifts_per_bin.append(predicted_uplift)
+
+        w_group = _get_w(group, weight_col)
+
+        mean_reward_treat = (
+            _wmean(group.loc[treat_mask, target_col], w_group.loc[treat_mask])
+            if treat_mask.sum() > 0 else 0
+        )
+        mean_reward_ctrl = (
+            _wmean(group.loc[ctrl_mask, target_col], w_group.loc[ctrl_mask])
+            if ctrl_mask.sum() > 0 else 0
+        )
+
         actual_uplift = mean_reward_treat - mean_reward_ctrl
         actual_uplifts_per_bin.append(actual_uplift)
 
-        # 计算该分箱的平均预测uplift
-        predicted_uplift = group[uplift_col].mean()
+        predicted_uplift = _wmean(group[uplift_col], w_group)
         predicted_uplifts_per_bin.append(predicted_uplift)
 
     # 4. 绘制柱状图
     bin_labels = [f'Top {i*100/bins:.0f}-{(i+1)*100/bins:.0f}%' for i in range(bins)]
     
-    # plt.figure(figsize=(12, 7))
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(12, 7))
     x = np.arange(len(bin_labels))
     num_actual_bins = len(actual_uplifts_per_bin)
     x = np.arange(num_actual_bins)
     
     width = 0.35
-    FONT_SIZE = 16 
 
     bars1 = plt.bar(x - width/2, actual_uplifts_per_bin, width, color='darkblue', label='True Uplift')
     bars2 = plt.bar(x + width/2, predicted_uplifts_per_bin, width, color='orange', label='Predicted Uplift')
     
     # 在每个柱子上方显示数值
-    # for bar in bars1:
-    #     yval = bar.get_height()
-    #     plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center', fontsize=FONT_SIZE)
+    for bar in bars1:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center')
 
-    # for bar in bars2:
-    #     yval = bar.get_height()
-    #     plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center', fontsize=FONT_SIZE)
+    for bar in bars2:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center')
 
     # 绘制一条代表整体平均Uplift的基准线
-    overall_average_uplift = (df.loc[df[treatment_col] == 1, target_col].mean() - 
-                              df.loc[df[treatment_col] == 0, target_col].mean())
+    # overall_average_uplift = (df.loc[df[treatment_col] == 1, target_col].mean() - 
+    #                           df.loc[df[treatment_col] == 0, target_col].mean())
+    w_all = _get_w(df, weight_col)
+    treat_all = df[treatment_col] == 1
+    ctrl_all = df[treatment_col] == 0
+
+    overall_average_uplift = (
+        _wmean(df.loc[treat_all, target_col], w_all.loc[treat_all])
+        - _wmean(df.loc[ctrl_all, target_col], w_all.loc[ctrl_all])
+    )
+
     plt.axhline(y=overall_average_uplift, color='r', linestyle='--', label=f'Overall Avg Uplift ({overall_average_uplift:.4f})')
 
-    # plt.title(f'Uplift Bar Plot for Model: {model_path}', fontsize=FONT_SIZE)
-    plt.xlabel('User Deciles (Sorted by Predicted Uplift)', fontsize=FONT_SIZE)
-    plt.ylabel(f'Average Uplift ({target_col})', fontsize=FONT_SIZE)
-    plt.xticks(x, bin_labels, rotation=45, ha='right', fontsize=FONT_SIZE)
-    plt.yticks(fontsize=FONT_SIZE)
-    plt.legend(fontsize=FONT_SIZE)
+    plt.title(f'Uplift Bar Plot for Model: {model_path}')
+    plt.xlabel('User Deciles (Sorted by Predicted Uplift)')
+    plt.ylabel(f'Average Uplift ({target_col.upper()})')
+    plt.xticks(x, bin_labels, rotation=45, ha='right')
+    plt.legend()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
 
@@ -958,6 +1045,7 @@ for model_path in model_paths_DFCL:
     all_paid_labels = []
     all_cost_labels = []
     all_treatment_labels = []
+    all_eval_weights = []
     
     
     print("开始分批次进行预测...")
@@ -1013,6 +1101,7 @@ for model_path in model_paths_DFCL:
         all_cost_labels.append(labels_batch['cost'].numpy())
         # all_treatment_labels.append(labels_batch['_treatment_index'].numpy())
         all_treatment_labels.append(labels_batch['treatment'].numpy())
+        all_eval_weights.append(labels_batch[weight_col].numpy())
 
     print("所有批次预测完成，正在整合结果...")
     # 将所有批次的结果（list of arrays）拼接成一个大的Numpy数组
@@ -1027,6 +1116,7 @@ for model_path in model_paths_DFCL:
     final_paid = np.concatenate(all_paid_labels)
     final_cost = np.concatenate(all_cost_labels)
     final_treatment = np.concatenate(all_treatment_labels)
+    final_weight = np.concatenate(all_eval_weights).astype(np.float64)
     
     # 6. 整合为DataFrame
     print("正在将所有结果整合到DataFrame...")
@@ -1042,6 +1132,8 @@ for model_path in model_paths_DFCL:
         'ctrl_cost': final_ctrl_cost,
         'uplift_paid': final_uplift_paid, # new
         'uplift_cost': final_uplift_cost, # new
+        # 新增：OSRCT complementary sample 测试权重
+        EVAL_WEIGHT_COL: final_weight,
     })
     
     with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
@@ -1052,16 +1144,15 @@ for model_path in model_paths_DFCL:
         
         # 7. 计算 AUCC 并获取绘图数据
         print("正在计算 AUCC 指标...")
-        aucc_score = strict_aucc_algorithm2(df=eval_df)
+        aucc_score = strict_aucc_algorithm2(df=eval_df, weight_col=EVAL_WEIGHT_COL)
         print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
-        aucc_score_2 = calculate_and_save_aucc(df=eval_df)
+        aucc_score_2 = calculate_and_save_aucc(df=eval_df, weight_col=EVAL_WEIGHT_COL)
         print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
 
         print("正在计算 AUUC 指标...")
-        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
+        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost', weight_col=EVAL_WEIGHT_COL)
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
-        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
-
+        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid', weight_col=EVAL_WEIGHT_COL)
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
         # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-roi AUUC 分数为: {auuc:.6f}")
@@ -1069,23 +1160,76 @@ for model_path in model_paths_DFCL:
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-roi AUUC 分数为: {auuc:.6f}")
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
-        # print("正在生成 Paid Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, bins=10)
+        print("正在生成 Paid Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, weight_col=EVAL_WEIGHT_COL)
         
-        # print("正在生成 Cost Uplift Bar Plot...")
-        # calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, bins=10)
+        print("正在生成 Cost Uplift Bar Plot...")
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, weight_col=EVAL_WEIGHT_COL)
         
         print("正在生成 AUCC Plot (Uplift)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path, weight_col=EVAL_WEIGHT_COL)
         
         print("正在生成 AUCC Plot (ROI)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path, weight_col=EVAL_WEIGHT_COL)
         
         
         
         # 1127Addition：
         # --- 新增评估逻辑 ---
         from sklearn.metrics import roc_auc_score
+
+        def calculate_reg_auc(y_true, y_pred, label_name, sample_weight=None):
+            """
+            加权 regAUC。
+
+            注意：
+            这里的 regAUC 是你原代码中的启发式定义：
+            先把连续真实值按 median 二值化，再用 roc_auc_score 评估预测排序。
+            OSRCT complementary sample 测试时，需要传 sample_weight。
+            """
+            y_true = pd.Series(y_true).reset_index(drop=True)
+            y_pred = pd.Series(y_pred).reset_index(drop=True)
+
+            if sample_weight is not None:
+                sample_weight = pd.Series(sample_weight).reset_index(drop=True).astype(float)
+            else:
+                sample_weight = pd.Series(np.ones(len(y_true)), index=y_true.index)
+
+            valid_mask = (
+                y_true.notna()
+                & y_pred.notna()
+                & sample_weight.notna()
+                & np.isfinite(y_true)
+                & np.isfinite(y_pred)
+                & np.isfinite(sample_weight)
+                & (sample_weight > 0)
+            )
+
+            y_true = y_true[valid_mask]
+            y_pred = y_pred[valid_mask]
+            sample_weight = sample_weight[valid_mask]
+
+            if len(y_true) == 0:
+                print(f"  - {label_name}: 无法计算 weighted regAUC，有效样本为空。")
+                return
+
+            if y_true.nunique() <= 1:
+                print(f"  - {label_name}: 无法计算 weighted regAUC，真实值单一。")
+                return
+
+            binary_true = (y_true > y_true.median()).astype(int)
+
+            if binary_true.nunique() <= 1:
+                print(f"  - {label_name}: 无法计算 weighted regAUC，二值化后只有一个类别。")
+                return
+
+            reg_auc = roc_auc_score(
+                binary_true,
+                y_pred,
+                sample_weight=sample_weight
+            )
+
+            print(f"  - {label_name} weighted regAUC: {reg_auc:.4f}")
 
         print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
         # 筛选出实验组数据用于评估
@@ -1096,36 +1240,21 @@ for model_path in model_paths_DFCL:
         else:
             # 1. 统计模型预估值平均值和真实值平均值对比
             print("\n模型预估值与真实值均值对比 (实验组):")
-            avg_pred_paid = treatment_df['treat_paid'].mean()
-            avg_true_paid = treatment_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
+            w_treat = _get_w(treatment_df, EVAL_WEIGHT_COL)
 
-            avg_pred_cost = treatment_df['treat_cost'].mean()
-            avg_true_cost = treatment_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
+            avg_pred_paid = _wmean(treatment_df['treat_paid'], w_treat)
+            avg_true_paid = _wmean(treatment_df['paid'], w_treat)
+            print(f"  - Paid: 预估加权平均值 = {avg_pred_paid:.4f}, 真实加权平均值 = {avg_true_paid:.4f}")
+
+            avg_pred_cost = _wmean(treatment_df['treat_cost'], w_treat)
+            avg_true_cost = _wmean(treatment_df['cost'], w_treat)
+            print(f"  - Cost: 预估加权平均值 = {avg_pred_cost:.4f}, 真实加权平均值 = {avg_true_cost:.4f}")
 
             # 2. 计算并展示 paid 和 cost 的 regAUC
             print("\n计算 Regression AUC (regAUC, 在实验组上):")
 
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
-
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
-                
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
-                
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
-
-            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
-            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
+            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid', sample_weight=w_treat)
+            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost', sample_weight=w_treat)
             
             
         # 筛选出对照组数据用于评估
@@ -1136,36 +1265,21 @@ for model_path in model_paths_DFCL:
         else:
             # 1. 统计模型预估值平均值和真实值平均值对比
             print("\n模型预估值与真实值均值对比 (对照组):")
-            avg_pred_paid = control_df['ctrl_paid'].mean()
-            avg_true_paid = control_df['paid'].mean()
-            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
+            w_ctrl = _get_w(control_df, EVAL_WEIGHT_COL)
 
-            avg_pred_cost = control_df['ctrl_cost'].mean()
-            avg_true_cost = control_df['cost'].mean()
-            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
+            avg_pred_paid = _wmean(control_df['ctrl_paid'], w_ctrl)
+            avg_true_paid = _wmean(control_df['paid'], w_ctrl)
+            print(f"  - Paid: 预估加权平均值 = {avg_pred_paid:.4f}, 真实加权平均值 = {avg_true_paid:.4f}")
+
+            avg_pred_cost = _wmean(control_df['ctrl_cost'], w_ctrl)
+            avg_true_cost = _wmean(control_df['cost'], w_ctrl)
+            print(f"  - Cost: 预估加权平均值 = {avg_pred_cost:.4f}, 真实加权平均值 = {avg_true_cost:.4f}")
 
             # 2. 计算并展示 paid 和 cost 的 regAUC
             print("\n计算 Regression AUC (regAUC, 在对照组上):")
 
-            def calculate_reg_auc(y_true, y_pred, label_name):
-                # 检查真实值是否都一样，无法计算AUC
-                if y_true.nunique() <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
-                    return
-
-                # 将回归问题转化为二分类问题来计算AUC
-                binary_true = (y_true > y_true.median()).astype(int)
-                
-                # 检查二分后的标签是否只有一个类别
-                if len(np.unique(binary_true)) <= 1:
-                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
-                    return
-                
-                reg_auc = roc_auc_score(binary_true, y_pred)
-                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
-
-            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
-            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
+            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid', sample_weight=w_ctrl)
+            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost', sample_weight=w_ctrl)
         # --- 评估逻辑结束 ---
 
 
@@ -1241,7 +1355,6 @@ def plot_aucc_from_json_v1(json_path: str, plot_path: str = 'aucc_comparison.png
     plt.savefig(plot_path)
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
-
 
 def plot_aucc_from_json_v2(
     json_path: str,
@@ -1319,11 +1432,6 @@ def plot_aucc_from_json_v2(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-from pathlib import Path
-import json
-import matplotlib.pyplot as plt
-from typing import Dict, Any, List, Optional
-
 def plot_aucc_from_json_v3(
     json_path: str,
     plot_path: str = 'aucc_comparison.png',
@@ -1342,43 +1450,69 @@ def plot_aucc_from_json_v3(
         print("JSON 文件为空或格式不正确，无法绘图。")
         return
 
-    model_name_map = model_name_map or {}
-
-    # ✅ 核心：按 model_names 的顺序决定绘图顺序（也决定 legend 顺序）
+    results_to_plot = all_results
     if model_names:
-        ordered_keys = [k for k in model_names if k in all_results]
-        not_found = [k for k in model_names if k not in all_results]
-        if not_found:
-            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
-    else:
-        # 不传 model_names 时，就按 JSON 的 key 顺序画
-        ordered_keys = list(all_results.keys())
+        results_to_plot = {k: v for k, v in all_results.items() if k in model_names}
 
-    if not ordered_keys:
+        found = set(results_to_plot.keys())
+        not_found = set(model_names) - found
+        if not_found:
+            print(f"警告: 在 {json_path} 中未找到以下模型: {list(not_found)}")
+
+    if not results_to_plot:
         print("没有找到可供绘制的模型数据。")
         return
 
     plt.figure(figsize=(10, 8))
 
-    for model_key in ordered_keys:
-        data = all_results.get(model_key, {})
+    model_name_map = model_name_map or {}
+
+    OTHER_COLORS = [
+        "#1f77b4",  # blue
+        "#2ca02c",  # green
+        "#ff7f0e",  # orange
+        "#9467bd",  # purple
+    ]
+    color_idx = 0  # 给非 ours 曲线依次分配颜色
+
+    base_lw = 2.0  # 其他模型的线宽（你也可以调）
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
+
+    for model_key, data in results_to_plot.items():
         if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
             print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
             continue
 
+        # 图例显示名
         display_name = model_name_map.get(model_key)
         if not display_name:
             display_name = Path(model_key).name if fallback_to_basename else model_key
 
+        # --- 核心：对 CC-DFL(Ours) 特殊处理 ---
+        is_highlight = (display_name == highlight_name)
+
+        if is_highlight:
+            color = "red"
+            lw = base_lw * 1.2
+            zorder = 10
+        else:
+            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
+            color_idx += 1
+            lw = base_lw
+            zorder = 1
+
         plt.plot(
             data['x_coords'],
             data['y_coords'],
-            marker='.',
             linestyle='-',
+            linewidth=lw,
+            color=color,
+            marker=None,        # 已去掉 marker
+            zorder=zorder,
             label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
         )
 
-    # 随机线放最后（legend 也会在最后）
+    # 随机线：归一化坐标下就是 y=x
     plt.plot([0, 1], [0, 1], color='k', linestyle='--', label='Random')
 
     plt.title('AUCC Curve Comparison')
@@ -1387,7 +1521,7 @@ def plot_aucc_from_json_v3(
     plt.legend()
     plt.grid(True)
 
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
@@ -1468,7 +1602,7 @@ def plot_aucc_from_json_v4(
             color=color,
             marker=None,        # 已去掉 marker
             zorder=zorder,
-            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
+            label=f'{display_name}'
         )
 
     # 随机线：归一化坐标下就是 y=x
@@ -1544,13 +1678,13 @@ def plot_aucc_from_json(
     OTHER_COLORS = [
         "#1f77b4",  # blue
         "#2ca02c",  # green
-        "#9467bd",  # purple
         "#ff7f0e",  # orange
+        "#9467bd",  # purple
     ]
     color_idx = 0
 
-    base_lw = 2.5
-    highlight_name = "CC-DFL"  # 这里改成你图例里真正显示的名字
+    base_lw = 2.0
+    highlight_name = "CC-DFL(Ours)"  # 这里改成你图例里真正显示的名字
 
     # ✅ 建议配合字号变大稍微放大画布
     plt.figure(figsize=(7.2, 5.4))
@@ -1585,11 +1719,11 @@ def plot_aucc_from_json(
             color=color,
             marker=None,
             zorder=zorder,
-            label=f'{display_name} ({data["aucc_score"]:.4f})',
+            label=display_name
         )
 
     # 随机线：归一化坐标下就是 y=x
-    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random', alpha=0.3)
+    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random')
 
     # ✅ 去掉标题（不再设置 plt.title）
     # plt.title('AUCC Curve Comparison')  # 删除/注释
@@ -1611,187 +1745,7 @@ def plot_aucc_from_json(
     plt.close()
     print(f"AUCC 曲线对比图已保存至: {plot_path}")
 
-def plot_aucc_from_json_v6(
-    json_path: str,
-    plot_path: str = 'aucc_comparison.pdf',
-    model_names: Optional[List[str]] = None,
-    model_name_map: Optional[Dict[str, str]] = None,
-    fallback_to_basename: bool = True,
-):
-    import json
-    from pathlib import Path
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from typing import Any, Dict, List, Optional
 
-    legend_fs = 16
-    axis_label_fs = legend_fs
-    tick_fs = legend_fs
-
-    try:
-        with open(json_path, 'r', encoding='utf-8') as f:
-            all_results: Dict[str, Dict[str, Any]] = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"读取或解析文件 {json_path} 时出错: {e}")
-        return
-
-    if not all_results:
-        print("JSON 文件为空或格式不正确，无法绘图。")
-        return
-
-    model_name_map = model_name_map or {}
-
-    if model_names:
-        ordered_keys = [k for k in model_names if k in all_results]
-        not_found = [k for k in model_names if k not in all_results]
-        if not_found:
-            print(f"警告: 在 {json_path} 中未找到以下模型: {not_found}")
-    else:
-        ordered_keys = list(all_results.keys())
-
-    if not ordered_keys:
-        print("没有找到可供绘制的模型数据。")
-        return
-
-    plt.rcParams['pdf.fonttype'] = 42
-    plt.rcParams['ps.fonttype'] = 42
-    plt.rcParams.update({
-        "font.size": legend_fs,
-        "axes.labelsize": axis_label_fs,
-        "xtick.labelsize": tick_fs,
-        "ytick.labelsize": tick_fs,
-        "legend.fontsize": legend_fs,
-    })
-
-    OTHER_COLORS = [
-        "#1f77b4",
-        "#2ca02c",
-        "#9467bd",
-        "#ff7f0e",
-    ]
-    color_idx = 0
-
-    base_lw = 2.5
-    highlight_name = "CC-DFL"
-
-    plt.figure(figsize=(7.2, 5.4))
-
-    def build_feasible_curve(x_coords, y_coords):
-        """
-        只保留 x >= 0 的 feasible 区域；
-        若线段穿过 x=0，则做线性插值补一个交点，避免断裂。
-        """
-        x_arr = np.asarray(x_coords, dtype=float)
-        y_arr = np.asarray(y_coords, dtype=float)
-
-        feasible_x = []
-        feasible_y = []
-
-        for i in range(len(x_arr) - 1):
-            x1, y1 = x_arr[i], y_arr[i]
-            x2, y2 = x_arr[i + 1], y_arr[i + 1]
-
-            if x1 >= 0:
-                if len(feasible_x) == 0 or (feasible_x[-1] != x1 or feasible_y[-1] != y1):
-                    feasible_x.append(x1)
-                    feasible_y.append(y1)
-
-            # 穿过 x=0，补交点
-            if (x1 < 0 and x2 > 0) or (x1 > 0 and x2 < 0):
-                t = (0.0 - x1) / (x2 - x1)
-                y0 = y1 + t * (y2 - y1)
-                feasible_x.append(0.0)
-                feasible_y.append(y0)
-
-            if x2 >= 0:
-                feasible_x.append(x2)
-                feasible_y.append(y2)
-
-        # 去重
-        dedup_x, dedup_y = [], []
-        for x, y in zip(feasible_x, feasible_y):
-            if len(dedup_x) == 0 or (x != dedup_x[-1] or y != dedup_y[-1]):
-                dedup_x.append(x)
-                dedup_y.append(y)
-
-        return dedup_x, dedup_y
-
-    for model_key in ordered_keys:
-        data = all_results.get(model_key, {})
-        if not ('x_coords' in data and 'y_coords' in data and 'aucc_score' in data):
-            print(f"模型 '{model_key}' 的数据不完整，跳过绘图。")
-            continue
-
-        display_name = model_name_map.get(model_key)
-        if not display_name:
-            display_name = Path(model_key).name if fallback_to_basename else model_key
-
-        is_highlight = (display_name == highlight_name)
-
-        if is_highlight:
-            color = "red"
-            raw_lw = base_lw * 1.2
-            feasible_lw = raw_lw
-            zorder_raw = 10
-            zorder_feasible = 11
-        else:
-            color = OTHER_COLORS[color_idx % len(OTHER_COLORS)]
-            color_idx += 1
-            raw_lw = base_lw
-            feasible_lw = base_lw
-            zorder_raw = 1
-            zorder_feasible = 2
-
-        raw_x = data['x_coords']
-        raw_y = data['y_coords']
-
-        # 1) 原始 AUCC
-        plt.plot(
-            raw_x,
-            raw_y,
-            linestyle='-',
-            linewidth=raw_lw,
-            color=color,
-            marker=None,
-            zorder=zorder_raw,
-            label=f'{display_name} Raw ({data["aucc_score"]:.4f})',
-        )
-
-        # 2) feasible 区域 AUCC
-        feasible_x, feasible_y = build_feasible_curve(raw_x, raw_y)
-        if len(feasible_x) >= 2:
-            feasible_area = np.trapz(feasible_y, feasible_x)
-            plt.plot(
-                feasible_x,
-                feasible_y,
-                linestyle='--',
-                linewidth=feasible_lw,
-                color=color,
-                marker=None,
-                alpha=0.95,
-                zorder=zorder_feasible,
-                label=f'{display_name} Feasible ({feasible_area:.4f})',
-            )
-
-    # Random
-    plt.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=base_lw, label='Random', alpha=0.3)
-
-    # 参考线：标出 feasible 分界
-    plt.axvline(x=0.0, color='gray', linestyle=':', linewidth=1.5, alpha=0.8)
-
-    plt.xlabel('Incremental Cost(ΔC)', fontsize=axis_label_fs)
-    plt.ylabel('Incremental Reward(ΔR)', fontsize=axis_label_fs)
-
-    plt.xticks(fontsize=tick_fs)
-    plt.yticks(fontsize=tick_fs)
-
-    plt.legend(fontsize=legend_fs, frameon=True)
-    plt.grid(True, alpha=0.3)
-
-    plt.savefig(plot_path, format='pdf', bbox_inches='tight')
-    plt.close()
-    print(f"AUCC 曲线对比图已保存至: {plot_path}")
-    
 #  'result_aucc.json'
 json_file_path = aucc_save_path
 output_image_path = f'result/aucc_curves_{current_time}.pdf'

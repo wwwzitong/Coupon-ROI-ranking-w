@@ -34,15 +34,14 @@ import sys
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils_ECLIFT import *
-DENSE_FEATURE_NAME = [f'f{i}' for i in range(46)]
+from data_utils import *
 SPARSE_FEATURE_NAME = []
+DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
 SPARSE_FEATURE_NAME_SLOT_ID = {}
-# SPARSE_FEATURE_NAME_SLOT_ID = {name: idx for idx, name in enumerate(SPARSE_FEATURE_NAME)}
 statistical_config={
-    'N':223428,
-    'N1':108523,
-    'N0':114905
+    'N':4978784,
+    'N1':4224439,
+    'N0':754345
 }
 
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):
@@ -51,12 +50,10 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     该模型采用增广拉格朗日方法进行约束优化。
     只参考形式，但还没有完全还原。
     """
-    def __init__(self, rho=0.1, alpha=1.0, batch_sum_mean='mean', loss_function='2pll', dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
+    def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
-        self.paid_pos_weight = 27.58/(100-27.58)
-        self.cost_pos_weight = 2.99/(100-2.99)
-        # self.paid_pos_weight = 1.0
-        # self.cost_pos_weight = 1.0
+        self.paid_pos_weight = 99.50/(100-99.50)
+        self.cost_pos_weight = 92.33/(100-92.33)
         
         # --- 增广拉格朗日方法超参数 ---
         self.rho = rho  # 二次惩罚项的系数 ρ
@@ -107,9 +104,6 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             0: statistical_config['N0']
         }
         
-        self.sparse_pooling_type = "mean"  # "mean" | "max" | "attention"
-        # self.max_seq_len = 100                  # ===== 新增 =====
-
         # 特征处理层
         self._build_feature_layers()
         
@@ -162,84 +156,17 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
                 output_dim=self.sparse_feature_dim,
                 name="embedding_slot_{}".format(slot_id)
             )
-        
-        # attention pooling 打分层（只有选择 attention 才会用到）
-        self.attn_score_layers = {}
-        if self.sparse_pooling_type == "attention":
-            for feature_name in self.sparse_feature_names:
-                self.attn_score_layers[feature_name] = tf.keras.layers.Dense(
-                    1, use_bias=False, name=f"attn_score_{feature_name}"
-                )
 
-    def _pool_sparse_embeddings(self, emb, mask, feature_name=None):
-        """
-        emb:  [B, L, D]
-        mask: [B, L]  (True/False)
-        return: [B, D]
-        """
-        mask_f = tf.cast(mask, tf.float32)
-        mask_f_e = tf.expand_dims(mask_f, axis=-1)  # [B, L, 1]
-
-        if self.sparse_pooling_type == "mean":
-            emb_masked = emb * mask_f_e
-            denom = tf.reduce_sum(mask_f_e, axis=1) + 1e-8
-            return tf.reduce_sum(emb_masked, axis=1) / denom
-
-        if self.sparse_pooling_type == "max":
-            very_neg = tf.constant(-1e9, dtype=emb.dtype)
-            emb_masked = tf.where(mask_f_e > 0, emb, very_neg)
-            return tf.reduce_max(emb_masked, axis=1)
-
-        # attention
-        score_layer = self.attn_score_layers[feature_name]
-        scores = score_layer(emb)  # [B, L, 1]
-        very_neg = tf.constant(-1e9, dtype=scores.dtype)
-        scores = tf.where(mask_f_e > 0, scores, very_neg)
-        attn = tf.nn.softmax(scores, axis=1)
-        return tf.reduce_sum(emb * attn, axis=1)
-    
-    def call(self, inputs, training=True):
+    def call(self, inputs, training=True): # 定义数据从输入到输出的完整流动路径       
+        # 特征处理
         sparse_vectors = []
-
-        for feature_name in self.sparse_feature_names:
-            raw = inputs[feature_name]  # 你现在实际是 [B] string（不是 [B,180]）
-
-            # 1) mask + ids
-            if raw.dtype == tf.string:
-                # 兼容 "" 和 "0" 作为 padding（你可按实际 padding 改）
-                mask = tf.logical_and(tf.not_equal(raw, ""), tf.not_equal(raw, "0"))
-                ids = self.hashing_layers[feature_name](raw)  # [B]
-            else:
-                raw_int = tf.cast(raw, tf.int32)
-                mask = tf.not_equal(raw_int, 0)
-                ids = tf.math.floormod(raw_int, self.num_estimated_vec_features)  # [B]
-
-            ids = tf.cast(ids, tf.int32)
-
-            # 2) 关键修复：如果是 [B]，扩成 [B,1]，让后续 embedding/pooling 走序列逻辑
-            if ids.shape.rank == 1:            # 静态 rank（最常见）
-                ids = tf.expand_dims(ids, axis=1)    # [B,1]
-                mask = tf.expand_dims(mask, axis=1)  # [B,1]
-            else:
-                # 动态 rank fallback（更保险）
-                ids = tf.cond(tf.equal(tf.rank(ids), 1),
-                            lambda: tf.expand_dims(ids, 1),
-                            lambda: ids)
-                mask = tf.cond(tf.equal(tf.rank(mask), 1),
-                            lambda: tf.expand_dims(mask, 1),
-                            lambda: mask)
-
-            # 3) embedding: [B, L, D]（这里 L=1）
-            slot_id = str(self.sparse_feature_slot_map[feature_name])
-            emb = self.embedding_layers[slot_id](ids)  # [B, 1, D]
-
-            # 4) pooling -> [B, D]（不会再变成 [B]）
-            pooled = self._pool_sparse_embeddings(emb, mask, feature_name=feature_name)
-            sparse_vectors.append(pooled)  # [B, D]
-
-        # ===== dense 部分建议也用显式 B reshape，避免潜在问题 =====
-        B = tf.shape(inputs[self.dense_feature_names[0]])[0]
         dense_vectors = []
+        # ======= 修改开始 =======
+        # for feature_name in self.dense_feature_names:
+        #     fcd = inputs[feature_name]
+        #     fcd = tf.math.log1p(tf.maximum(fcd,0.0))
+        #     fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
+        #     dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
         for i, feature_name in enumerate(self.dense_feature_names):
             # fcd变换之前记录数据分布
             raw_val = inputs[feature_name]
@@ -253,7 +180,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             fcd = tf.maximum(fcd, 0.0)
             if self.fcd_mode == 'log1p':
                 fcd = tf.math.log1p(fcd)
-
+            
             if self._dense_global_mean is not None and self._dense_global_std is not None:
                 mean = self._dense_global_mean[i]
                 std = self._dense_global_std[i]
@@ -261,13 +188,14 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
             else:
                 fcd = (fcd - tf.reduce_mean(fcd)) / (tf.math.reduce_std(fcd) + 1e-8)
 
-            dense_vectors.append(tf.reshape(fcd, [B, 1]))  # [B,1]
-
+            dense_vectors.append(tf.reshape(fcd, [-1, self.dense_feature_dim]))
+            
             # fcd变换之后记录数据分布
             if training:
                 if not hasattr(self, "_last_fcd"):
                     self._last_fcd = {}
                 self._last_fcd[feature_name] = tf.reshape(fcd, [-1])  # 展平成一维便于 histogram
+        # ======= 修改结束 =======
 
         concat_input = tf.concat(sparse_vectors + dense_vectors, axis=1)
         
@@ -330,44 +258,14 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
         return paid_loss, cost_loss
 
-    def compute_local_losses_mse(self, predictions, labels):
-        paid_loss = tf.constant(0.0, dtype=tf.float32)
-        cost_loss = tf.constant(0.0, dtype=tf.float32)
-
-        # 预先计算 treatment_mask（只一次）
-        treatment_idx = tf.cast(labels['treatment'], tf.int32)
-
-        for target_name in self.targets:
-            local_loss = tf.constant(0.0, dtype=tf.float32)
-
-            for treatment in self.treatment_order:
-                pred_name = f"{target_name}_treatment_{treatment}"
-                pred = tf.cast(predictions[pred_name], tf.float32)
-                label = tf.cast(labels[target_name], tf.float32)
-
-                # MSE: (pred - label)^2
-                loss_per_sample = tf.math.squared_difference(pred, label)
-
-                treatment_mask = tf.cast(tf.equal(treatment_idx, treatment), tf.float32)
-
-                masked_loss = loss_per_sample * treatment_mask
-                local_loss += tf.reduce_mean(masked_loss)
-
-            if target_name == 'paid':
-                paid_loss += local_loss
-            else:
-                cost_loss += local_loss
-
-        return paid_loss, cost_loss
-
     def decision_learning_objective_term(self, predictions, labels): # 5.3 引入温度参数τ和最大熵正则化，使得决策损失更加平滑且可微
         decision_loss_sum = tf.constant(0.0, dtype=tf.float32)
         # 预先计算 treatment_mask（仅一次）
         treatment_idx = tf.cast(labels['treatment'], tf.int32)
 
-        pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions.items()}
+        # pred_dict = {key: tf.exp(tf.minimum(logit, 10.0)) for key, logit in predictions.items()}
         # pred_dict = {key: tf.minimum(logit, 10.0) for key, logit in predictions.items()}
-        # pred_dict = {key: tf.minimum(tf.nn.sigmoid(logit), 10.0) for key, logit in predictions.items()}
+        pred_dict = {key: tf.minimum(tf.nn.sigmoid(logit), 10.0) for key, logit in predictions.items()}
 
         for ratio in self.ratios: # 模拟决策过程
             cancat_list, mask_list = [], []
@@ -389,8 +287,8 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
 
             decision_loss_sum += decision_loss
             
-        return decision_loss_sum / len(self.ratios)
-        # return decision_loss_sum
+        # return decision_loss_sum / len(self.ratios)
+        return decision_loss_sum
 
 
     def _add_summaries(self, name, tensor, step):
@@ -400,44 +298,29 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
         tf.summary.scalar(f"{name}/min", tf.reduce_min(tensor), step=step)
         tf.summary.histogram(f"{name}/histogram", tensor, step=step)
 
-    def _grad_as_vector(self, g):
-        """把梯度转成可计算的向量张量：Tensor -> Tensor，IndexedSlices -> values。"""
-        if g is None:
-            return None
-        if isinstance(g, tf.IndexedSlices):
-            return tf.cast(g.values, tf.float32)   # 只用非零部分
-        return tf.cast(g, tf.float32)
-
     def _compute_cosine_similarity(self, grads1, grads2):
-        dot_product = tf.constant(0.0, tf.float32)
-        norm1_sq = tf.constant(0.0, tf.float32)
-        norm2_sq = tf.constant(0.0, tf.float32)
+        """计算两组梯度之间的余弦相似度"""
+        dot_product = tf.constant(0.0, dtype=tf.float32)
+        norm1_sq = tf.constant(0.0, dtype=tf.float32)
+        norm2_sq = tf.constant(0.0, dtype=tf.float32)
 
+        # 遍历梯度对，只处理两者都非None的情况
         for g1, g2 in zip(grads1, grads2):
-            if g1 is None or g2 is None:
-                continue
-
-            v1 = self._grad_as_vector(g1)
-            v2 = self._grad_as_vector(g2)
-
-            # 维度必须相同才算；不相同就跳过（极少见，但保险）
-            if v1.shape.rank != v2.shape.rank:
-                continue
-
-            dot_product += tf.reduce_sum(v1 * v2)
-            norm1_sq += tf.reduce_sum(tf.square(v1))
-            norm2_sq += tf.reduce_sum(tf.square(v2))
-
-        return tf.math.divide_no_nan(dot_product, tf.sqrt(norm1_sq * norm2_sq))
-
+            if g1 is not None and g2 is not None:
+                dot_product += tf.reduce_sum(g1 * g2)
+                norm1_sq += tf.reduce_sum(g1 * g1)
+                norm2_sq += tf.reduce_sum(g2 * g2)
+        
+        # 避免除以零
+        denominator = tf.sqrt(norm1_sq * norm2_sq)
+        return tf.math.divide_no_nan(dot_product, denominator)
+    
     def _compute_grad_dot_product(self, grads1, grads2):
-        dot_product = tf.constant(0.0, tf.float32)
+        """计算两组梯度的点积（grad1 · grad2），用于判断任务梯度是否冲突"""
+        dot_product = tf.constant(0.0, dtype=tf.float32)
         for g1, g2 in zip(grads1, grads2):
-            if g1 is None or g2 is None:
-                continue
-            v1 = self._grad_as_vector(g1)
-            v2 = self._grad_as_vector(g2)
-            dot_product += tf.reduce_sum(v1 * v2)
+            if g1 is not None and g2 is not None:
+                dot_product += tf.reduce_sum(g1 * g2)
         return dot_product
 
 

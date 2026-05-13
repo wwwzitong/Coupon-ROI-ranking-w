@@ -108,7 +108,20 @@ algo_conf = {
                 'names': ['treatment', 'conversion', 'visit', 'exposure'],
                 'dtype': 'float',
                 'default_value': 0.0
-            }
+            },
+            {
+                'names': [
+                    '__osrct_alpha',
+                    '__p_ts1',
+                    '__p_accept',
+                    '__p_reject',
+                    '__complement_weight',
+                    '__outcome_score',
+                    '__sample_role'
+                ],
+                'dtype': 'string',
+                'default_value': ''
+            },
         ]
     }
 }

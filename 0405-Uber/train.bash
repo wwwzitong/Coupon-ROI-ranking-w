@@ -1,7 +1,7 @@
 # python data_process.py
 
 
-python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0
+python train.py --model_class_name EcomDFCL_regretNet_rplusc --tau 1.0 --bs 256 --max_multiplier 1.0 --lr 1e-4 --clipnorm 5e3 --model_path ./model/EcomDFCL_regretNet_rplusc_wce_bs256_step500_lr1e-4_clip=5e3_max=1_tau=1.0_2pos
 
 # python train.py --model_class_name SLearner --bs 256 --lr 1e-3 --clipnorm 5e3 --model_path ./model/SLearner_wce_mean_bs256_step500_lr1e-3_clip=5e3
 

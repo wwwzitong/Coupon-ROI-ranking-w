@@ -1,5 +1,6 @@
 # 忽略 data 文件夹及其所有内容
 data/
+criteo_osrct/
 
 # 忽略 Python 缓存文件夹 (截图显示为 __pycache__)
 __pycache__/
