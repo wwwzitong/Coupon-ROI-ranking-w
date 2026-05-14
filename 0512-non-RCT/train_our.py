@@ -21,8 +21,8 @@ config = {
     'model_class_name': 'EcomDFCL_regretNet_rc',
     'model_path': './model/EcomDFCL_regretNet_rc_2pll_2pos_lr3',
     'last_model_path': '',
-    'train_data': './criteo_osrct/criteo_osrct_conversion_direct_alpha_2p0_train_split8_train.csv', 
-    'val_data': './criteo_osrct/criteo_osrct_conversion_direct_alpha_2p0_train_split1_val.csv',
+    'train_data': '../data/osrct_train.csv', 
+    'val_data': '../data/osrct_val.csv',
     'batch_size': 2048,
     'num_epochs': 50,
     'learning_rate': 0.001, # initial learning rate

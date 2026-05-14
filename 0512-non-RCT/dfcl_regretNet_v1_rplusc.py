@@ -39,9 +39,9 @@ SPARSE_FEATURE_NAME = []
 DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
 SPARSE_FEATURE_NAME_SLOT_ID = {}
 statistical_config={
-    'N':4978784,
-    'N1':4224439,
-    'N0':754345
+    'N':4480906,
+    'N1':3801996,
+    'N0':678910
 }
 
 class EcomDFCL_regretNet_rplusc(tf.keras.Model):
@@ -53,7 +53,7 @@ class EcomDFCL_regretNet_rplusc(tf.keras.Model):
     def __init__(self, rho=0.1, dense_stats=None, fcd_mode='log1p', lambda_update_frequency=20, max_multiplier=1.0, tau=1.0, **kwargs):
         super().__init__(**kwargs)
         self.paid_pos_weight = 99.50/(100-99.50)
-        self.cost_pos_weight = 92.33/(100-92.33)
+        self.cost_pos_weight = 92.32/(100-92.32)
         
         # --- 增广拉格朗日方法超参数 ---
         self.rho = rho  # 二次惩罚项的系数 ρ

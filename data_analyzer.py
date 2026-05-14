@@ -157,7 +157,7 @@ def analyze_labels_and_treatment_from_csv(file_path):
 
 # --- 主执行逻辑 ---
 # !! 请将此路径替换为您的实际 CSV 文件路径 !!
-CSV_FILE_PATH = '0512-non-RCT/criteo_osrct/criteo_osrct_conversion_direct_alpha_2p0_train_split8_train.csv' 
+CSV_FILE_PATH = 'data/osrct_train.csv' 
 
 # 执行分析
 report_lines = analyze_labels_and_treatment_from_csv(CSV_FILE_PATH)
