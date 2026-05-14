@@ -15,7 +15,6 @@ import argparse
 import random
 import io
 
-
 # --- 1. 配置字典（替代命令行参数） ---
 config = {
     'model_class_name': 'EcomDFCL_regretNet_rc',
@@ -23,7 +22,7 @@ config = {
     'last_model_path': '',
     'train_data': '../data/osrct_train.csv', 
     'val_data': '../data/osrct_val.csv',
-    'batch_size': 2048,
+    'batch_size': 4096,
     'num_epochs': 50,
     'learning_rate': 0.001, # initial learning rate
     'summary_steps': 1000,
@@ -42,6 +41,7 @@ parser.add_argument('--model_class_name', type=str, default=config['model_class_
 parser.add_argument('--model_path', type=str, default=config['model_path'],
                     help='The path to save the model and logs.')
 parser.add_argument('--fcd_mode', type=str, default="log1p", help='Fcd mode: raw or log1p.')
+parser.add_argument('--loss_function', type=str, default="2pll", help='2pll/3erl/4ifdl')
 parser.add_argument('--clipnorm', type=float, default=5e3, help='Gradient clipnorm')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--max_multiplier', type=float, default=1.0, help='max lagrangian multiplier')
@@ -49,8 +49,9 @@ parser.add_argument('--scheduler', type=str, default='raw', help='learning rate 
 parser.add_argument('--tau', type=float, default=1.0, help='temprature tau')
 parser.add_argument('--rho', type=float, default=0.1, help='rho for updating mu')
 parser.add_argument('--bs', type=int, default=4096, help='batchsize')
+parser.add_argument('--alpha', type=float, default=1.0, help='alpha')
+parser.add_argument('--alldata', type=str, default="True", help='True/Flase')
 parser.add_argument('--seed', type=int, default=42, help='global random seed')
-
 
 args = parser.parse_args()
 
@@ -70,9 +71,6 @@ def set_seeds(seed=42):
     
     # 设置TensorFlow随机种子
     tf.random.set_seed(seed)
-    # # 设置操作确定性（可能影响性能但提高可复现性）
-    # os.environ['TF_DETERMINISTIC_OPS'] = '1'
-    # os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
     
     # 设置PYTHONHASHSEED
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -87,7 +85,9 @@ sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 #from fsfc_mine import * #自行生成fsfc文件（脚本放在data_flow中）
-from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+# from dfcl_regretNet_v1_rplusc import EcomDFCL_regretNet_rplusc, DENSE_FEATURE_NAME
+from ecom_dfcl_fcd import EcomDFCL_v3, DENSE_FEATURE_NAME
+
 # from dfcl_regretNet_v2_tau import EcomDFCL_regretNet_tau, DENSE_FEATURE_NAME
 
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -126,20 +126,24 @@ config['model_class_name'] = args.model_class_name
 config['model_path'] = args.model_path
 config['fcd_mode'] = args.fcd_mode
 config['clipnorm'] = args.clipnorm
+config['loss_function'] = args.loss_function
 config['learning_rate'] = args.lr
 config['tau'] = args.tau
 config['rho'] = args.rho
 config['max_multiplier'] = args.max_multiplier
 config['scheduler'] = args.scheduler
 config['batch_size'] = args.bs
+config['alpha'] = args.alpha
 
 print("--- 运行配置 ---")
 print(f"Model Class: {config['model_class_name']}")
 print(f"Model Path: {config['model_path']}")
 print(f"batch_size: {config['batch_size']}")
+print(f"loss_function: {config['loss_function']}")
 print(f"tau: {config['tau']}")
 print(f"rho: {config['rho']}")
-# print(f"FCD Mode: {config['fcd_mode']}")
+print(f"alpha: {config['alpha']}")
+print(f"FCD Mode: {config['fcd_mode']}")
 print(f"clipnorm: {config['clipnorm']}")
 print(f"learning rate: {config['learning_rate']}")
 # print(f"scheduler: {config['scheduler']}")
@@ -229,6 +233,7 @@ drop_list = [
     '__complement_weight',
     '__outcome_score'
 ]
+
 # --- Step: 将 dataset 转换为 (features, labels) 格式 ---
 def _to_features_labels(parsed_example):
     # 提取 features（从 feature_name_list 中）
@@ -342,7 +347,7 @@ dense_stats = compute_global_dense_stats(train_for_stats, DENSE_FEATURE_NAME, cl
 with strategy.scope():
     # 从配置中动态获取并实例化模型类
     model_class = globals()[config['model_class_name']]
-    model = model_class(tau=config['tau'], rho=config['rho'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats)
+    model = model_class(tau=config['tau'], rho=config['rho'], alpha=config['alpha'], max_multiplier=config['max_multiplier'], fcd_mode=config['fcd_mode'], dense_stats=dense_stats, loss_function=config['loss_function'])
     
     if config['scheduler'] == 'raw':
         optimizer = tf.keras.optimizers.Adam(learning_rate=config['learning_rate'], clipnorm=config['clipnorm'])
@@ -364,35 +369,35 @@ with strategy.scope():
         optimizer=optimizer,loss=None
     )
 
+if args.alldata == "True":
+    ##### 0125 New #####
+    # 1) 更稳的 steps 计算（兼容 drop_remainder）
+    num_rows = _count_csv_rows(config['train_data'])
+    steps_per_epoch = max(1, num_rows // global_batch_size)
 
-##### 0125 New #####
-# 1) 更稳的 steps 计算（兼容 drop_remainder）
-num_rows = _count_csv_rows(config['train_data'])
-steps_per_epoch = max(1, num_rows // global_batch_size)
+    val_rows = _count_csv_rows(config['val_data'])
+    validation_steps = max(1, val_rows // global_batch_size)
 
-val_rows = _count_csv_rows(config['val_data'])
-validation_steps = max(1, val_rows // global_batch_size)
+    # 2) 确保不会第二个 epoch “没数据”
+    train_samples = train_samples.repeat()
+    val_samples = val_samples.repeat()
 
-# 2) 确保不会第二个 epoch “没数据”
-train_samples = train_samples.repeat()
-val_samples = val_samples.repeat()
+    # 3) 分布式分片策略（可选但推荐）
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+    train_samples = train_samples.with_options(options)
+    val_samples = val_samples.with_options(options)
 
-# 3) 分布式分片策略（可选但推荐）
-options = tf.data.Options()
-options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-train_samples = train_samples.with_options(options)
-val_samples = val_samples.with_options(options)
-
-model.fit(
-    train_samples,
-    validation_data=val_samples,
-    epochs=config['num_epochs'],
-    steps_per_epoch=steps_per_epoch,
-    validation_steps=validation_steps,
-    callbacks=callbacks
-)
-
-# model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = steps_per_epoch, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
+    model.fit(
+        train_samples,
+        validation_data=val_samples,
+        epochs=config['num_epochs'],
+        steps_per_epoch=steps_per_epoch,
+        validation_steps=validation_steps,
+        callbacks=callbacks
+    )
+else:
+    model.fit(train_samples, validation_data=val_samples, epochs=config['num_epochs'], steps_per_epoch = 500, callbacks=callbacks) # ,verbose=2) # 只在每个 epoch 结束后打印一行日志
 
 # 保存最终模型
 print(f"训练完成，正在将模型保存到: {config['model_path']}")

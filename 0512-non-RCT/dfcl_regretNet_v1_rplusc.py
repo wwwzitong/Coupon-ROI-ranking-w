@@ -34,7 +34,7 @@ import sys
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils import *
+from data_utils_osrct import *
 SPARSE_FEATURE_NAME = []
 DENSE_FEATURE_NAME = ['f0', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8', 'f9', 'f10', 'f11']
 SPARSE_FEATURE_NAME_SLOT_ID = {}

@@ -30,7 +30,7 @@ from typing import Dict, Any, List, Optional
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils import *
+from data_utils_osrct import *
 
 # 将输出保存到文件
 
@@ -115,12 +115,11 @@ def set_seeds(seed=42):
 set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
-    'eval_data': './criteo_osrct/criteo_osrct_conversion_direct_alpha_2p0_complement.csv',
+    'eval_data': '../data/osrct_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
-    'auuc_save_path': "result/result_auuc.json", #保存好坐标点，以便后续画图
-    'weight_col': '__complement_weight', # 新增：OSRCT complementary sample 测试权重
+    'auuc_save_path': "result/result_auuc.json" #保存好坐标点，以便后续画图
 }
 # # 训练集上试试
 # config = {
@@ -145,13 +144,11 @@ eval_samples = dataset.prepare_dataset(
 )
 
 # --- Step: 提取 drop_list 和 label_name_list ---
-weight_col = config.get('weight_col', '__complement_weight')
-
-label_name_list = ['treatment', 'paid', 'cost', weight_col]
+label_name_list = ['treatment', 'paid', 'cost']
 
 # 注意：权重列和 OSRCT 构造元数据不能作为模型输入 feature
 drop_list = [
-    'paid', 'cost', weight_col,
+    'paid', 'cost', '__complement_weight', 
     '__sample_role', '__osrct_alpha',
     '__p_ts1', '__p_accept', '__p_reject',
     '__outcome_score'
@@ -177,15 +174,14 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs2048_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
+    "./model/SLearner_2pos_bs2048_lr3_clip=100",
+    "./model/EcomDFCL_v3_2pll_bs2048_step500_lr1e-3_alpha=0.1_clip=5e3_raw", 
+    "./model/EcomDFCL_v3_3erl_bs2048_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw", 
+    "./model/EcomDFCL_v3_4ifdl_bs2048_step500_lr1e-3_alpha=100_clip=100_log1p", 
 ]
 model_paths_else = [
 
-    # "./model/SLearner_2pos_lr3_clip=100",
-    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
-    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
-    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs2048_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 
 ]
 
@@ -206,80 +202,6 @@ aucc_save_path = config['aucc_save_path']
 auuc_save_path = config['auuc_save_path']
 
 
-EVAL_WEIGHT_COL = 'sample_weight'
-
-def _get_w(df, weight_col=EVAL_WEIGHT_COL):
-    if weight_col is None or weight_col not in df.columns:
-        return pd.Series(np.ones(len(df), dtype=np.float64), index=df.index)
-
-    w = pd.to_numeric(df[weight_col], errors='coerce').fillna(0.0).astype(np.float64)
-    w = w.replace([np.inf, -np.inf], 0.0)
-    w = w.clip(lower=0.0)
-
-    if w.sum() <= 0:
-        return pd.Series(np.ones(len(df), dtype=np.float64), index=df.index)
-
-    return w
-
-
-def _wmean(x, w):
-    x = pd.to_numeric(x, errors='coerce').astype(np.float64)
-    w = pd.to_numeric(w, errors='coerce').fillna(0.0).astype(np.float64)
-
-    mask = np.isfinite(x) & np.isfinite(w) & (w > 0)
-    if mask.sum() == 0:
-        return np.nan
-
-    return float(np.average(x[mask], weights=w[mask]))
-
-
-def _weighted_cumdiff_curve(
-    df_sorted,
-    reward_col,
-    cost_col=None,
-    treatment_col='treatment',
-    treatment_val=1,
-    control_val=0,
-    weight_col=EVAL_WEIGHT_COL,
-):
-    """
-    OSRCT complementary sample 加权累计 uplift 曲线。
-
-    ΔR_k = [E_w(R|T=1, top-k) - E_w(R|T=0, top-k)] * weighted_population_k
-    ΔC_k 同理。
-    """
-    w = _get_w(df_sorted, weight_col)
-
-    treat_mask = df_sorted[treatment_col].eq(treatment_val).astype(float)
-    ctrl_mask = df_sorted[treatment_col].eq(control_val).astype(float)
-
-    pop_w_cumsum = w.cumsum()
-
-    treat_w_cumsum = (w * treat_mask).cumsum().replace(0, np.nan)
-    ctrl_w_cumsum = (w * ctrl_mask).cumsum().replace(0, np.nan)
-
-    treat_reward_cumsum = (df_sorted[reward_col] * w * treat_mask).cumsum()
-    ctrl_reward_cumsum = (df_sorted[reward_col] * w * ctrl_mask).cumsum()
-
-    delta_reward = (
-        treat_reward_cumsum / treat_w_cumsum
-        - ctrl_reward_cumsum / ctrl_w_cumsum
-    ).fillna(0.0) * pop_w_cumsum
-
-    if cost_col is None:
-        return delta_reward, None, pop_w_cumsum
-
-    treat_cost_cumsum = (df_sorted[cost_col] * w * treat_mask).cumsum()
-    ctrl_cost_cumsum = (df_sorted[cost_col] * w * ctrl_mask).cumsum()
-
-    delta_cost = (
-        treat_cost_cumsum / treat_w_cumsum
-        - ctrl_cost_cumsum / ctrl_w_cumsum
-    ).fillna(0.0) * pop_w_cumsum
-
-    return delta_reward, delta_cost, pop_w_cumsum
-
-
 # 生成当前时间字符串
 current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -290,7 +212,7 @@ current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 
-def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', bins=100, weight_col=EVAL_WEIGHT_COL,):
+def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', bins=100):
     """
     reference：https://bytedance.larkoffice.com/docx/URpyd2iS9o8puxxvD7JcS3jUnkb?bk_entity_id=enterprise_7332387637669888004
     逐点排序并作图，无其他过滤逻辑。很考验数据本身的质量和模型的水平
@@ -303,29 +225,19 @@ def strict_aucc_algorithm2(df, reward_col='paid', cost_col='cost', treatment_col
     S = 0
     delta_C_prev = 0
 
-    # # 提前准备掩码
-    # treat_mask = df[treatment_col] == 1
-    # ctrl_mask = df[treatment_col] == 0
+    # 提前准备掩码
+    treat_mask = df[treatment_col] == 1
+    ctrl_mask = df[treatment_col] == 0
 
-    # # 初始化累计和
-    # treat_reward_cumsum = (df[reward_col] * treat_mask).cumsum()
-    # ctrl_reward_cumsum = (df[reward_col] * ctrl_mask).cumsum()
-    # treat_cost_cumsum = (df[cost_col] * treat_mask).cumsum()
-    # ctrl_cost_cumsum = (df[cost_col] * ctrl_mask).cumsum()
+    # 初始化累计和
+    treat_reward_cumsum = (df[reward_col] * treat_mask).cumsum()
+    ctrl_reward_cumsum = (df[reward_col] * ctrl_mask).cumsum()
+    treat_cost_cumsum = (df[cost_col] * treat_mask).cumsum()
+    ctrl_cost_cumsum = (df[cost_col] * ctrl_mask).cumsum()
 
-    # # 预计算 ΔR_k 和 ΔC_k 序列
-    # delta_R_list = treat_reward_cumsum - ctrl_reward_cumsum  # ΔR_k
-    # delta_C_list = treat_cost_cumsum - ctrl_cost_cumsum      # ΔC_k
-
-    delta_R_list, delta_C_list, _ = _weighted_cumdiff_curve(
-        df,
-        reward_col=reward_col,
-        cost_col=cost_col,
-        treatment_col=treatment_col,
-        treatment_val=1,
-        control_val=0,
-        weight_col=weight_col,
-    )
+    # 预计算 ΔR_k 和 ΔC_k 序列
+    delta_R_list = treat_reward_cumsum - ctrl_reward_cumsum  # ΔR_k
+    delta_C_list = treat_cost_cumsum - ctrl_cost_cumsum      # ΔC_k
 
     # Step 3-10: 主循环积分
     # S = ∑_{k=1}^{n} ΔR_k × (ΔC_k - ΔC_{k-1})
@@ -462,7 +374,7 @@ def calculate_and_save_aucc_old(df, reward_col='paid', cost_col='cost', treatmen
 # In[10]:
 
 
-def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv", weight_col=EVAL_WEIGHT_COL,):
+def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_col='treatment', uplift_col='uplift', uplift_gmv_col='uplift_gmv', uplift_cost_col='uplift_cost', treatment_val=1, control_val=0, n_bins=100, output_dip_samples_path="result/dip_samples.csv"):
     '''
     公司另外一个版本的AUCC,分bins去作图，以bins中的第一个user作为落点依据。图会更加的平滑。无其他过滤逻辑。
     '''
@@ -476,35 +388,24 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
     # 将索引从1开始，方便后续计算累积用户数
     df_sorted.index = df_sorted.index + 1
 
-    # # --- 第3步: 计算累积uplift (delta_gain, delta_cost) ---
-    # is_treatment = (df_sorted[treatment_col] == treatment_val)
+    # --- 第3步: 计算累积uplift (delta_gain, delta_cost) ---
+    is_treatment = (df_sorted[treatment_col] == treatment_val)
     
-    # cumsum_tr = is_treatment.cumsum()
-    # cumsum_ct = df_sorted.index.values - cumsum_tr
+    cumsum_tr = is_treatment.cumsum()
+    cumsum_ct = df_sorted.index.values - cumsum_tr
     
-    # # 为避免除以0，将累积数为0的替换为NaN，后续计算平均值时会自动忽略
-    # cumsum_tr_safe = cumsum_tr.replace(0, np.nan)
-    # cumsum_ct_safe = cumsum_ct.replace(0, np.nan)
+    # 为避免除以0，将累积数为0的替换为NaN，后续计算平均值时会自动忽略
+    cumsum_tr_safe = cumsum_tr.replace(0, np.nan)
+    cumsum_ct_safe = cumsum_ct.replace(0, np.nan)
 
-    # cumsum_gain_tr = (df_sorted[reward_col] * is_treatment).cumsum()
-    # cumsum_gain_ct = (df_sorted[reward_col] * ~is_treatment).cumsum()
-    # cumsum_cost_tr = (df_sorted[cost_col] * is_treatment).cumsum()
-    # cumsum_cost_ct = (df_sorted[cost_col] * ~is_treatment).cumsum()
+    cumsum_gain_tr = (df_sorted[reward_col] * is_treatment).cumsum()
+    cumsum_gain_ct = (df_sorted[reward_col] * ~is_treatment).cumsum()
+    cumsum_cost_tr = (df_sorted[cost_col] * is_treatment).cumsum()
+    cumsum_cost_ct = (df_sorted[cost_col] * ~is_treatment).cumsum()
 
-    # # 计算累积uplift
-    # df_sorted['delta_gain'] = (cumsum_gain_tr / cumsum_tr_safe - cumsum_gain_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
-    # df_sorted['delta_cost'] = (cumsum_cost_tr / cumsum_tr_safe - cumsum_cost_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
-
-    # --- 第3步: 加权计算累计 uplift ---
-    df_sorted['delta_gain'], df_sorted['delta_cost'], df_sorted['cum_weight'] = _weighted_cumdiff_curve(
-        df_sorted,
-        reward_col=reward_col,
-        cost_col=cost_col,
-        treatment_col=treatment_col,
-        treatment_val=treatment_val,
-        control_val=control_val,
-        weight_col=weight_col,
-    )
+    # 计算累积uplift
+    df_sorted['delta_gain'] = (cumsum_gain_tr / cumsum_tr_safe - cumsum_gain_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
+    df_sorted['delta_cost'] = (cumsum_cost_tr / cumsum_tr_safe - cumsum_cost_ct / cumsum_ct_safe).fillna(0) * df_sorted.index.values
 
     # --- 第4步: 按 delta_cost 进行分桶 ---
     # 完全遵循 metric.py 中的分桶逻辑
@@ -585,7 +486,7 @@ def calculate_and_save_aucc(df, reward_col='paid', cost_col='cost', treatment_co
 # In[11]:
 
 
-def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model', weight_col=EVAL_WEIGHT_COL,):
+def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path='unknown_model'):
     """
     计算AUCC
     :param pdf: 计算aucc的pandas df
@@ -598,31 +499,18 @@ def get_aucc_plot(pdf, treatment_col='treatment', gain_col='paid', cost_col='cos
     """
     aucc_dict = {}
     aucc_dict[pred_roi_col] = {}
-    # df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[[gain_col, cost_col, pred_roi_col, treatment_col]]
-    df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[
-        [gain_col, cost_col, pred_roi_col, treatment_col, weight_col]
-    ]
+    df = pdf[(pdf[treatment_col] == 0) | (pdf[treatment_col] == treatment_index)].reset_index(drop=True)[[gain_col, cost_col, pred_roi_col, treatment_col]]
     df = df.sort_values(pred_roi_col, ascending=False).reset_index(drop=True)
     df.index = df.index + 1
-    # cumsum_tr = (df[treatment_col] != 0).cumsum().replace(0, np.nan)
-    # # print(cumsum_tr)
-    # cumsum_ct = (df.index.values - cumsum_tr).replace(0, np.nan)
-    # cumsum_gain_tr = (df[gain_col] * (df[treatment_col] != 0)).cumsum()
-    # cumsum_gain_ct = (df[gain_col] * (df[treatment_col] == 0)).cumsum()
-    # cumsum_cost_tr = (df[cost_col] * (df[treatment_col] != 0)).cumsum()
-    # cumsum_cost_ct = (df[cost_col] * (df[treatment_col] == 0)).cumsum()
-    # df["delta_gain"] = (cumsum_gain_tr / cumsum_tr - cumsum_gain_ct / cumsum_ct).fillna(0) * df.index.values
-    # df["delta_cost"] = (cumsum_cost_tr / cumsum_tr - cumsum_cost_ct / cumsum_ct).fillna(0) * df.index.values 
-    
-    df["delta_gain"], df["delta_cost"], df["cum_weight"] = _weighted_cumdiff_curve(
-        df,
-        reward_col=gain_col,
-        cost_col=cost_col,
-        treatment_col=treatment_col,
-        treatment_val=treatment_index,
-        control_val=0,
-        weight_col=weight_col,
-    )
+    cumsum_tr = (df[treatment_col] != 0).cumsum().replace(0, np.nan)
+    # print(cumsum_tr)
+    cumsum_ct = (df.index.values - cumsum_tr).replace(0, np.nan)
+    cumsum_gain_tr = (df[gain_col] * (df[treatment_col] != 0)).cumsum()
+    cumsum_gain_ct = (df[gain_col] * (df[treatment_col] == 0)).cumsum()
+    cumsum_cost_tr = (df[cost_col] * (df[treatment_col] != 0)).cumsum()
+    cumsum_cost_ct = (df[cost_col] * (df[treatment_col] == 0)).cumsum()
+    df["delta_gain"] = (cumsum_gain_tr / cumsum_tr - cumsum_gain_ct / cumsum_ct).fillna(0) * df.index.values
+    df["delta_cost"] = (cumsum_cost_tr / cumsum_tr - cumsum_cost_ct / cumsum_ct).fillna(0) * df.index.values 
     
     # --- 增加的归一化逻辑 ---
     # 获取总的增量收益和成本，用于归一化
@@ -739,7 +627,7 @@ def calculate_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col=
 # In[13]:
 
 
-def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift', weight_col=EVAL_WEIGHT_COL,):
+def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='uplift'):
     """
     计算归一化的累计Uplift曲线下面积 (Normalized Cumulative AUUC)。
     """
@@ -747,32 +635,36 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
     df_sorted = df.sort_values(uplift_col, ascending=False).reset_index(drop=True)
     n_total = len(df_sorted)
 
-    # Step 2-3: OSRCT complementary sample 加权累计 uplift
-    cumulative_uplift, _, pop_w_cumsum = _weighted_cumdiff_curve(
-        df_sorted,
-        reward_col=reward_col,
-        cost_col=None,
-        treatment_col=treatment_col,
-        treatment_val=1,
-        control_val=0,
-        weight_col=weight_col,
-    )
+    # Step 2: 预先计算实验组和对照组的掩码及累计和，提高效率
+    treat_mask = (df_sorted[treatment_col] == 1)
+    ctrl_mask = (df_sorted[treatment_col] == 0)
 
-    # Step 4: 加权 population fraction
-    total_weight = pop_w_cumsum.iloc[-1] if len(pop_w_cumsum) > 0 else 0
-    if total_weight > 0:
-        population_fraction = (pop_w_cumsum / total_weight).to_numpy()
-    else:
-        population_fraction = np.arange(1, n_total + 1) / max(n_total, 1)
+    # 计算累计用户数
+    n_treat_cumsum = treat_mask.cumsum()
+    n_ctrl_cumsum = ctrl_mask.cumsum()
 
+    # 计算累计收益
+    reward_treat_cumsum = (df_sorted[reward_col] * treat_mask).cumsum()
+    reward_ctrl_cumsum = (df_sorted[reward_col] * ctrl_mask).cumsum()
+
+    # 防止除零错误
+    n_treat_cumsum_safe = n_treat_cumsum.replace(0, 1e-9)
+    n_ctrl_cumsum_safe = n_ctrl_cumsum.replace(0, 1e-9)
+
+    # Step 3: 计算累计Uplift (Incremental Uplift)
+    # 这是与“平均Uplift”方法的核心区别
+    cumulative_uplift = (reward_treat_cumsum / n_treat_cumsum_safe - reward_ctrl_cumsum / n_ctrl_cumsum_safe) * (n_treat_cumsum + n_ctrl_cumsum)
+
+    # Step 4: 归一化坐标轴
+    population_fraction = np.arange(1, n_total + 1) / n_total
     x_coords = [0] + population_fraction.tolist()
-
+    
+    # Y轴通过除以总Uplift进行归一化
     total_uplift = cumulative_uplift.iloc[-1]
     if total_uplift != 0:
         y_coords_normalized = (cumulative_uplift / total_uplift).tolist()
     else:
         y_coords_normalized = [0] * n_total
-
     y_coords = [0] + y_coords_normalized
     
     # Step 5: 计算AUUC (曲线下面积) 和基线AUUC
@@ -890,7 +782,7 @@ def plot_auuc(df, reward_col='cost', treatment_col='treatment', uplift_col='upli
 # In[14]:
 
 
-def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatment', uplift_col='uplift', bins=20, model_path='unknown_model', weight_col=EVAL_WEIGHT_COL):
+def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatment', uplift_col='uplift', bins=20, model_path='unknown_model'):
     """
     计算并绘制 Uplift Bar Plot。
 
@@ -930,33 +822,16 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
         treat_mask = group[treatment_col] == 1
         ctrl_mask = group[treatment_col] == 0
 
-        # # 计算每个分箱中实验组和对照组的平均收益
-        # mean_reward_treat = group.loc[treat_mask, target_col].mean() if treat_mask.sum() > 0 else 0
-        # mean_reward_ctrl = group.loc[ctrl_mask, target_col].mean() if ctrl_mask.sum() > 0 else 0
+        # 计算每个分箱中实验组和对照组的平均收益
+        mean_reward_treat = group.loc[treat_mask, target_col].mean() if treat_mask.sum() > 0 else 0
+        mean_reward_ctrl = group.loc[ctrl_mask, target_col].mean() if ctrl_mask.sum() > 0 else 0
         
-        # # 计算真实 uplift
-        # actual_uplift = mean_reward_treat - mean_reward_ctrl
-        # actual_uplifts_per_bin.append(actual_uplift)
-
-        # # 计算该分箱的平均预测uplift
-        # predicted_uplift = group[uplift_col].mean()
-        # predicted_uplifts_per_bin.append(predicted_uplift)
-
-        w_group = _get_w(group, weight_col)
-
-        mean_reward_treat = (
-            _wmean(group.loc[treat_mask, target_col], w_group.loc[treat_mask])
-            if treat_mask.sum() > 0 else 0
-        )
-        mean_reward_ctrl = (
-            _wmean(group.loc[ctrl_mask, target_col], w_group.loc[ctrl_mask])
-            if ctrl_mask.sum() > 0 else 0
-        )
-
+        # 计算真实 uplift
         actual_uplift = mean_reward_treat - mean_reward_ctrl
         actual_uplifts_per_bin.append(actual_uplift)
 
-        predicted_uplift = _wmean(group[uplift_col], w_group)
+        # 计算该分箱的平均预测uplift
+        predicted_uplift = group[uplift_col].mean()
         predicted_uplifts_per_bin.append(predicted_uplift)
 
     # 4. 绘制柱状图
@@ -982,17 +857,8 @@ def calculate_and_plot_uplift_bar(df, target_col='paid', treatment_col='treatmen
         plt.text(bar.get_x() + bar.get_width()/2.0, yval, f'{yval:.4f}', va='bottom' if yval >= 0 else 'top', ha='center')
 
     # 绘制一条代表整体平均Uplift的基准线
-    # overall_average_uplift = (df.loc[df[treatment_col] == 1, target_col].mean() - 
-    #                           df.loc[df[treatment_col] == 0, target_col].mean())
-    w_all = _get_w(df, weight_col)
-    treat_all = df[treatment_col] == 1
-    ctrl_all = df[treatment_col] == 0
-
-    overall_average_uplift = (
-        _wmean(df.loc[treat_all, target_col], w_all.loc[treat_all])
-        - _wmean(df.loc[ctrl_all, target_col], w_all.loc[ctrl_all])
-    )
-
+    overall_average_uplift = (df.loc[df[treatment_col] == 1, target_col].mean() - 
+                              df.loc[df[treatment_col] == 0, target_col].mean())
     plt.axhline(y=overall_average_uplift, color='r', linestyle='--', label=f'Overall Avg Uplift ({overall_average_uplift:.4f})')
 
     plt.title(f'Uplift Bar Plot for Model: {model_path}')
@@ -1045,7 +911,6 @@ for model_path in model_paths_DFCL:
     all_paid_labels = []
     all_cost_labels = []
     all_treatment_labels = []
-    all_eval_weights = []
     
     
     print("开始分批次进行预测...")
@@ -1101,7 +966,6 @@ for model_path in model_paths_DFCL:
         all_cost_labels.append(labels_batch['cost'].numpy())
         # all_treatment_labels.append(labels_batch['_treatment_index'].numpy())
         all_treatment_labels.append(labels_batch['treatment'].numpy())
-        all_eval_weights.append(labels_batch[weight_col].numpy())
 
     print("所有批次预测完成，正在整合结果...")
     # 将所有批次的结果（list of arrays）拼接成一个大的Numpy数组
@@ -1116,7 +980,6 @@ for model_path in model_paths_DFCL:
     final_paid = np.concatenate(all_paid_labels)
     final_cost = np.concatenate(all_cost_labels)
     final_treatment = np.concatenate(all_treatment_labels)
-    final_weight = np.concatenate(all_eval_weights).astype(np.float64)
     
     # 6. 整合为DataFrame
     print("正在将所有结果整合到DataFrame...")
@@ -1132,8 +995,6 @@ for model_path in model_paths_DFCL:
         'ctrl_cost': final_ctrl_cost,
         'uplift_paid': final_uplift_paid, # new
         'uplift_cost': final_uplift_cost, # new
-        # 新增：OSRCT complementary sample 测试权重
-        EVAL_WEIGHT_COL: final_weight,
     })
     
     with tee_output(f"{model_path}/eval.log", mode="a", encoding="utf-8"):
@@ -1144,15 +1005,15 @@ for model_path in model_paths_DFCL:
         
         # 7. 计算 AUCC 并获取绘图数据
         print("正在计算 AUCC 指标...")
-        aucc_score = strict_aucc_algorithm2(df=eval_df, weight_col=EVAL_WEIGHT_COL)
+        aucc_score = strict_aucc_algorithm2(df=eval_df)
         print(f"模型 {model_path} 的 AUCC 分数为: {aucc_score:.6f}")
-        aucc_score_2 = calculate_and_save_aucc(df=eval_df, weight_col=EVAL_WEIGHT_COL)
+        aucc_score_2 = calculate_and_save_aucc(df=eval_df)
         print(f"模型 {model_path} 的 AUCC公司版本 分数为: {aucc_score_2:.6f}")
 
         print("正在计算 AUUC 指标...")
-        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost', weight_col=EVAL_WEIGHT_COL)
+        plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='uplift_cost')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-uplift AUUC 分数为: {auuc:.6f}")
-        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid', weight_col=EVAL_WEIGHT_COL)
+        plot_auuc(df=eval_df,reward_col='paid', treatment_col='treatment', uplift_col='uplift_paid')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, paid-uplift AUUC 分数为: {auuc:.6f}")
         # plot_auuc(df=eval_df, reward_col='cost', treatment_col='treatment', uplift_col='roi')
         # print(f"模型 {model_path} 的 基线AUUC 分数为: {baseline_auuc:.6f}, cost-roi AUUC 分数为: {auuc:.6f}")
@@ -1161,75 +1022,22 @@ for model_path in model_paths_DFCL:
         
         # --- 新增：调用 Uplift Bar Plot 函数 ---
         print("正在生成 Paid Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path, weight_col=EVAL_WEIGHT_COL)
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='paid', uplift_col='uplift_paid', model_path=model_path)
         
         print("正在生成 Cost Uplift Bar Plot...")
-        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path, weight_col=EVAL_WEIGHT_COL)
+        calculate_and_plot_uplift_bar(df=eval_df, target_col='cost', uplift_col='uplift_cost', model_path=model_path)
         
         print("正在生成 AUCC Plot (Uplift)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path, weight_col=EVAL_WEIGHT_COL)
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='uplift', treatment_index=1, model_path=model_path)
         
         print("正在生成 AUCC Plot (ROI)...")
-        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path, weight_col=EVAL_WEIGHT_COL)
+        get_aucc_plot(eval_df, treatment_col='treatment', gain_col='paid', cost_col='cost', pred_roi_col='roi', treatment_index=1, model_path=model_path)
         
         
         
         # 1127Addition：
         # --- 新增评估逻辑 ---
         from sklearn.metrics import roc_auc_score
-
-        def calculate_reg_auc(y_true, y_pred, label_name, sample_weight=None):
-            """
-            加权 regAUC。
-
-            注意：
-            这里的 regAUC 是你原代码中的启发式定义：
-            先把连续真实值按 median 二值化，再用 roc_auc_score 评估预测排序。
-            OSRCT complementary sample 测试时，需要传 sample_weight。
-            """
-            y_true = pd.Series(y_true).reset_index(drop=True)
-            y_pred = pd.Series(y_pred).reset_index(drop=True)
-
-            if sample_weight is not None:
-                sample_weight = pd.Series(sample_weight).reset_index(drop=True).astype(float)
-            else:
-                sample_weight = pd.Series(np.ones(len(y_true)), index=y_true.index)
-
-            valid_mask = (
-                y_true.notna()
-                & y_pred.notna()
-                & sample_weight.notna()
-                & np.isfinite(y_true)
-                & np.isfinite(y_pred)
-                & np.isfinite(sample_weight)
-                & (sample_weight > 0)
-            )
-
-            y_true = y_true[valid_mask]
-            y_pred = y_pred[valid_mask]
-            sample_weight = sample_weight[valid_mask]
-
-            if len(y_true) == 0:
-                print(f"  - {label_name}: 无法计算 weighted regAUC，有效样本为空。")
-                return
-
-            if y_true.nunique() <= 1:
-                print(f"  - {label_name}: 无法计算 weighted regAUC，真实值单一。")
-                return
-
-            binary_true = (y_true > y_true.median()).astype(int)
-
-            if binary_true.nunique() <= 1:
-                print(f"  - {label_name}: 无法计算 weighted regAUC，二值化后只有一个类别。")
-                return
-
-            reg_auc = roc_auc_score(
-                binary_true,
-                y_pred,
-                sample_weight=sample_weight
-            )
-
-            print(f"  - {label_name} weighted regAUC: {reg_auc:.4f}")
 
         print("\n" + "-"*10 + " 额外评估指标 " + "-"*10)
         # 筛选出实验组数据用于评估
@@ -1240,21 +1048,36 @@ for model_path in model_paths_DFCL:
         else:
             # 1. 统计模型预估值平均值和真实值平均值对比
             print("\n模型预估值与真实值均值对比 (实验组):")
-            w_treat = _get_w(treatment_df, EVAL_WEIGHT_COL)
+            avg_pred_paid = treatment_df['treat_paid'].mean()
+            avg_true_paid = treatment_df['paid'].mean()
+            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-            avg_pred_paid = _wmean(treatment_df['treat_paid'], w_treat)
-            avg_true_paid = _wmean(treatment_df['paid'], w_treat)
-            print(f"  - Paid: 预估加权平均值 = {avg_pred_paid:.4f}, 真实加权平均值 = {avg_true_paid:.4f}")
-
-            avg_pred_cost = _wmean(treatment_df['treat_cost'], w_treat)
-            avg_true_cost = _wmean(treatment_df['cost'], w_treat)
-            print(f"  - Cost: 预估加权平均值 = {avg_pred_cost:.4f}, 真实加权平均值 = {avg_true_cost:.4f}")
+            avg_pred_cost = treatment_df['treat_cost'].mean()
+            avg_true_cost = treatment_df['cost'].mean()
+            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
             # 2. 计算并展示 paid 和 cost 的 regAUC
             print("\n计算 Regression AUC (regAUC, 在实验组上):")
 
-            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid', sample_weight=w_treat)
-            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost', sample_weight=w_treat)
+            def calculate_reg_auc(y_true, y_pred, label_name):
+                # 检查真实值是否都一样，无法计算AUC
+                if y_true.nunique() <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+                    return
+
+                # 将回归问题转化为二分类问题来计算AUC
+                binary_true = (y_true > y_true.median()).astype(int)
+                
+                # 检查二分后的标签是否只有一个类别
+                if len(np.unique(binary_true)) <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+                    return
+                
+                reg_auc = roc_auc_score(binary_true, y_pred)
+                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+
+            calculate_reg_auc(treatment_df['paid'], treatment_df['treat_paid'], 'Paid')
+            calculate_reg_auc(treatment_df['cost'], treatment_df['treat_cost'], 'Cost')
             
             
         # 筛选出对照组数据用于评估
@@ -1265,21 +1088,36 @@ for model_path in model_paths_DFCL:
         else:
             # 1. 统计模型预估值平均值和真实值平均值对比
             print("\n模型预估值与真实值均值对比 (对照组):")
-            w_ctrl = _get_w(control_df, EVAL_WEIGHT_COL)
+            avg_pred_paid = control_df['ctrl_paid'].mean()
+            avg_true_paid = control_df['paid'].mean()
+            print(f"  - Paid: 预估平均值 = {avg_pred_paid:.4f}, 真实平均值 = {avg_true_paid:.4f}")
 
-            avg_pred_paid = _wmean(control_df['ctrl_paid'], w_ctrl)
-            avg_true_paid = _wmean(control_df['paid'], w_ctrl)
-            print(f"  - Paid: 预估加权平均值 = {avg_pred_paid:.4f}, 真实加权平均值 = {avg_true_paid:.4f}")
-
-            avg_pred_cost = _wmean(control_df['ctrl_cost'], w_ctrl)
-            avg_true_cost = _wmean(control_df['cost'], w_ctrl)
-            print(f"  - Cost: 预估加权平均值 = {avg_pred_cost:.4f}, 真实加权平均值 = {avg_true_cost:.4f}")
+            avg_pred_cost = control_df['ctrl_cost'].mean()
+            avg_true_cost = control_df['cost'].mean()
+            print(f"  - Cost: 预估平均值 = {avg_pred_cost:.4f}, 真实平均值 = {avg_true_cost:.4f}")
 
             # 2. 计算并展示 paid 和 cost 的 regAUC
             print("\n计算 Regression AUC (regAUC, 在对照组上):")
 
-            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid', sample_weight=w_ctrl)
-            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost', sample_weight=w_ctrl)
+            def calculate_reg_auc(y_true, y_pred, label_name):
+                # 检查真实值是否都一样，无法计算AUC
+                if y_true.nunique() <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因实验组中'{label_name.lower()}'真实值单一。")
+                    return
+
+                # 将回归问题转化为二分类问题来计算AUC
+                binary_true = (y_true > y_true.median()).astype(int)
+                
+                # 检查二分后的标签是否只有一个类别
+                if len(np.unique(binary_true)) <= 1:
+                    print(f"  - {label_name}: 无法计算regAUC，因真实值中位数导致所有样本归于一类。")
+                    return
+                
+                reg_auc = roc_auc_score(binary_true, y_pred)
+                print(f"  - {label_name} regAUC: {reg_auc:.4f}")
+
+            calculate_reg_auc(control_df['paid'], control_df['ctrl_paid'], 'Paid')
+            calculate_reg_auc(control_df['cost'], control_df['ctrl_cost'], 'Cost')
         # --- 评估逻辑结束 ---
 
 
@@ -1719,7 +1557,8 @@ def plot_aucc_from_json(
             color=color,
             marker=None,
             zorder=zorder,
-            label=display_name
+            # label=display_name
+            label=f'{display_name} (AUCC = {data["aucc_score"]:.4f})'
         )
 
     # 随机线：归一化坐标下就是 y=x

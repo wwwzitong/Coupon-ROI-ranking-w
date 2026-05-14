@@ -30,7 +30,7 @@ from typing import Dict, Any, List, Optional
 CODE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if CODE_DIR not in sys.path:
     sys.path.insert(0, CODE_DIR)
-from data_utils import *
+from data_utils_osrct import *
 
 # 将输出保存到文件
 
@@ -174,15 +174,14 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs2048_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
+    "./model/SLearner_2pos_bs2048_lr3_clip=100",
+    "./model/EcomDFCL_v3_2pll_bs2048_step500_lr1e-3_alpha=0.1_clip=5e3_raw", 
+    "./model/EcomDFCL_v3_3erl_bs2048_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw", 
+    "./model/EcomDFCL_v3_4ifdl_bs2048_step500_lr1e-3_alpha=100_clip=100_log1p", 
 ]
 model_paths_else = [
 
-    # "./model/SLearner_2pos_lr3_clip=100",
-    # "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw",
-    # "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw",
-    # "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2",
-    # "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5",
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs2048_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 
 ]
 
