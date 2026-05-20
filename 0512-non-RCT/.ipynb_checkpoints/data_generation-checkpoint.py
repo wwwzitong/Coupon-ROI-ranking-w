@@ -169,8 +169,8 @@ def make_bias_probability(
     score: np.ndarray,
     alpha: float,
     target_mean: float = 0.5,
-    clip_low: float = 0.05,
-    clip_high: float = 0.95,
+    clip_low: float = 0.02,
+    clip_high: float = 0.98,
 ) -> np.ndarray:
     """
     构造 P(T_s=1 | C^b)。
@@ -450,10 +450,10 @@ def main() -> None:
     parser.add_argument("--target", default="conversion", choices=["conversion", "visit"])
     parser.add_argument("--treatment", default="treatment")
     # parser.add_argument("--alphas", nargs="+", type=float, default=[0.0, 0.5, 1.0, 2.0])
-    parser.add_argument("--alphas", nargs="+", type=float, default=[1.0])
+    parser.add_argument("--alphas", nargs="+", type=float, default=[5.0])
     parser.add_argument("--bias-target-mean", type=float, default=0.5)
-    parser.add_argument("--clip-low", type=float, default=0.05)
-    parser.add_argument("--clip-high", type=float, default=0.95)
+    parser.add_argument("--clip-low", type=float, default=0.02)
+    parser.add_argument("--clip-high", type=float, default=0.98)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--nrows", type=int, default=None)
     parser.add_argument("--sample-n", type=int, default=None)

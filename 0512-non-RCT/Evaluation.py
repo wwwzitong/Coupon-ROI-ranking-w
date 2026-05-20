@@ -115,7 +115,7 @@ def set_seeds(seed=42):
 set_seeds(42)  # 你可以更改为任何固定值
 
 config = {
-    'eval_data': '../data/osrct_test.csv',
+    'eval_data': '../data/osrct_finalprop_1p0_test.csv',
     'batch_size': 1024*16,
     'max_batches_for_eval':79,
     'aucc_save_path': "result/result_aucc.json", #保存好坐标点，以便后续画图
@@ -174,21 +174,22 @@ eval_samples = eval_samples.map(
 
 # 步骤 3: 循环评估每个已保存的模型
 model_paths_DFCL = [
-    "./model/SLearner_2pos_bs2048_lr3_clip=100",
-    "./model/EcomDFCL_v3_2pll_bs2048_step500_lr1e-3_alpha=0.1_clip=5e3_raw", 
-    "./model/EcomDFCL_v3_3erl_bs2048_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw", 
-    "./model/EcomDFCL_v3_4ifdl_bs2048_step500_lr1e-3_alpha=100_clip=100_log1p", 
+    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs1024_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_1p0final_wopos",
+    "./model/SLearner_2pos_bs1024_lr3_clip=100_1p0final_wopos",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw_1p0final_wopos", 
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_1p0final_wopos", 
+    "./model/EcomDFCL_v3_4ifdl_bs1024_step500_lr1e-3_alpha=100_clip=100_log1p_1p0final_wopos", 
 ]
 model_paths_else = [
 
-    "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs2048_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw",
 
+    
 ]
 
 model_name_map = {
-    "./model/SLearner_2pos_lr3_clip=100": "MTP",
-    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw": "DFCL-PL",
-    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw": "DFCL-MER",
+    "./model/SLearner_2pos_lr3_clip=100_5p0": "MTP",
+    "./model/EcomDFCL_v3_2pll_bs1024_step500_lr1e-3_alpha=0.1_clip=5e3_raw_5p0": "DFCL-PL",
+    "./model/EcomDFCL_v3_3erl_bs1024_step500_lr1e-3_alpha=100_clip=5e3_tau=3_raw_5p0": "DFCL-MER",
     "./model/EcomDFCL_v3_4ifdl_bs256_step500_lr1e-3_alpha=100_clip=100_log1p_run2": "DFCL-IFD",
     "./model/EcomDFCL_regretNet_rplusc_wce_batchmean_bs4096_lr1e-3_clip=5e3_max=0.1_tau=0.5_raw_run5": "CC-DFL(Ours)",
 }
